@@ -30,6 +30,9 @@ const (
 	defaultGridscaleAPIURL        = "https://api.gridscale.io"
 	defaultDelayIntervalMilliSecs = 5000
 	defaultMaxNumberOfRetries     = 5
+	defaultMinNodeCount           = 1
+
+	gridscaleK8sActiveStatus = "active"
 )
 
 type nodeGroupClient interface {
@@ -51,44 +54,57 @@ type Manager struct {
 }
 
 func newManager() (*Manager, error) {
-	gridscaleUUID := os.Getenv("GRIDSCALE_UUID")
+	gridscaleUUID := os.Getenv("API_UUID")
 	if gridscaleUUID == "" {
-		return nil, errors.New("env var GRIDSCALE_UUID is not provided")
+		return nil, errors.New("env var API_UUID is not provided")
 	}
-	gridscaleToken := os.Getenv("GRIDSCALE_TOKEN")
+	gridscaleToken := os.Getenv("API_TOKEN")
 	if gridscaleToken == "" {
-		return nil, errors.New("env var GRIDSCALE_TOKEN is not provided")
+		return nil, errors.New("env var API_TOKEN is not provided")
 	}
-	gskClusterUUID := os.Getenv("GRIDSCALE_GSK_UUID")
+	gskClusterUUID := os.Getenv("CLUSTER_UUID")
 	if gskClusterUUID == "" {
-		return nil, errors.New("env var GRIDSCALE_GSK_UUID is not provided")
+		return nil, errors.New("env var CLUSTER_UUID is not provided")
 	}
-	minNodeCountStr := os.Getenv("GRIDSCALE_GSK_MIN_NODE_COUNT")
-	if minNodeCountStr == "" {
-		return nil, errors.New("env var GRIDSCALE_GSK_MIN_NODE_COUNT is not provided")
+	minNodeCount := defaultMinNodeCount
+	minNodeCountStr := os.Getenv("CLUSTER_MIN_NODE_COUNT")
+	if minNodeCountStr != "" {
+		var err error
+		// convert minNodeCount to int
+		minNodeCount, err = strconv.Atoi(minNodeCountStr)
+		if err != nil {
+			return nil, fmt.Errorf("env var CLUSTER_MIN_NODE_COUNT is not a valid integer: %v", err)
+		}
 	}
-	// convert minNodeCount to int
-	minNodeCount, err := strconv.Atoi(minNodeCountStr)
-	if err != nil {
-		return nil, fmt.Errorf("env var GRIDSCALE_GSK_MIN_NODE_COUNT is not a valid integer: %v", err)
+	// min node count must be at least 1
+	if minNodeCount < 1 {
+		return nil, errors.New("env var CLUSTER_MIN_NODE_COUNT must be at least 1")
 	}
-	maxNodeCountStr := os.Getenv("GRIDSCALE_GSK_MAX_NODE_COUNT")
+	maxNodeCountStr := os.Getenv("CLUSTER_MAX_NODE_COUNT")
 	if maxNodeCountStr == "" {
-		return nil, errors.New("env var GRIDSCALE_GSK_MAX_NODE_COUNT is not provided")
+		return nil, errors.New("env var CLUSTER_MAX_NODE_COUNT is not provided")
 	}
 	// convert maxNodeCount to int
 	maxNodeCount, err := strconv.Atoi(maxNodeCountStr)
 	if err != nil {
-		return nil, fmt.Errorf("env var GRIDSCALE_GSK_MAX_NODE_COUNT is not a valid integer: %v", err)
+		return nil, fmt.Errorf("env var CLUSTER_MAX_NODE_COUNT is not a valid integer: %v", err)
 	}
-
+	// max node count must be larger than min node count
+	if maxNodeCount < minNodeCount {
+		return nil, errors.New("env var CLUSTER_MAX_NODE_COUNT must be larger than CLUSTER_MIN_NODE_COUNT")
+	}
 	apiURL := defaultGridscaleAPIURL
-	envVarApiURL := os.Getenv("GRIDSCALE_API_URL")
+	envVarApiURL := os.Getenv("API_API_URL")
 	if envVarApiURL != "" {
 		apiURL = envVarApiURL
 	}
-	gsConfig := gsclient.NewConfiguration(apiURL, gridscaleUUID, gridscaleToken, true, true, defaultDelayIntervalMilliSecs, defaultMaxNumberOfRetries)
+	gsConfig := gsclient.NewConfiguration(apiURL, gridscaleUUID, gridscaleToken, false, true, defaultDelayIntervalMilliSecs, defaultMaxNumberOfRetries)
 	client := gsclient.NewClient(gsConfig)
+	// check if gsk cluster exists
+	_, err = client.GetPaaSService(context.Background(), gskClusterUUID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get gsk cluster: %v", err)
+	}
 	m := &Manager{
 		client:       client,
 		clusterUUID:  gskClusterUUID,
@@ -108,6 +124,10 @@ func (m *Manager) Refresh() error {
 	k8sCluster, err := m.client.GetPaaSService(ctx, m.clusterUUID)
 	if err != nil {
 		return err
+	}
+	// if k8s cluster's status is not active, return error
+	if k8sCluster.Properties.Status != gridscaleK8sActiveStatus {
+		return fmt.Errorf("k8s cluster status is not active: %s", k8sCluster.Properties.Status)
 	}
 	nodeCount, ok := k8sCluster.Properties.Parameters["k8s_worker_node_count"].(float64)
 	if !ok {
