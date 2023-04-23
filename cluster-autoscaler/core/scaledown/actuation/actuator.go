@@ -17,6 +17,7 @@ limitations under the License.
 package actuation
 
 import (
+	"fmt"
 	"reflect"
 	"strings"
 	"time"
@@ -106,6 +107,13 @@ func (a *Actuator) StartDeletion(empty, drain []*apiv1.Node, currentTime time.Ti
 }
 
 // StartDeletionForGridscaleProvider triggers a new deletion process for gridscale provider.
+// *NOTE* gridscale provider does not support deletion of specific nodes. Gridscale provider only supports
+// scale up/down by changing the number of nodes in the cluster. For the case of scale down, the last n nodes are
+// deleted automatically by the provider. Therefore, we need to follow theses steps:
+// 1. Count the number of nodes to be deleted (including to-be-deleted empty and to-be-deleted non-empty nodes).
+// 2. Replace the to-be-deleted nodes with the last n nodes in the cluster.
+// 3. Taint & drain the to-be-deleted nodes.
+// 4. Delete the last n nodes in the cluster.
 func (a *Actuator) StartDeletionForGridscaleProvider(empty, drain, all []*apiv1.Node, currentTime time.Time) (*status.ScaleDownStatus, errors.AutoscalerError) {
 	defer func() { metrics.UpdateDuration(metrics.ScaleDownNodeDeletion, time.Now().Sub(currentTime)) }()
 	results, ts := a.nodeDeletionTracker.DeletionResults()
@@ -117,27 +125,86 @@ func (a *Actuator) StartDeletionForGridscaleProvider(empty, drain, all []*apiv1.
 		return scaleDownStatus, nil
 	}
 
-	// Taint empty nodes synchronously, and immediately start deletions asynchronously. Because these nodes are empty, there's no risk that a pod from one
-	// to-be-deleted node gets recreated on another.
-	emptyScaledDown, err := a.taintSyncDeleteAsyncEmpty(emptyToDelete)
-	scaleDownStatus.ScaledDownNodes = append(scaleDownStatus.ScaledDownNodes, emptyScaledDown...)
-	if err != nil {
+	// Count the number of nodes to be deleted.
+	nodesToDeleteCount := len(emptyToDelete) + len(drainToDelete)
+
+	if nodesToDeleteCount >= len(all) {
+		// If the number of nodes to be deleted is greater than or equal to the number of nodes in the cluster,
+		// we cannot delete the nodes. Return an error.
 		scaleDownStatus.Result = status.ScaleDownError
-		return scaleDownStatus, err
+		return scaleDownStatus, errors.NewAutoscalerError(
+			errors.InternalError,
+			"cannot delete nodes because the number of nodes to be deleted is greater than or equal to the number of nodes in the cluster. There has to be at least one node left in the cluster.",
+		)
+	}
+
+	// Replace the to-be-deleted nodes with the last n nodes in the cluster.
+	var nodesToDelete []*apiv1.Node
+	if nodesToDeleteCount > 0 {
+		nodesToDelete = all[len(all)-nodesToDeleteCount:]
+	}
+
+	// do some sanity check
+	if len(nodesToDelete) <= 0 {
+		scaleDownStatus.Result = status.ScaleDownError
+		return scaleDownStatus, errors.NewAutoscalerError(
+			errors.InternalError,
+			"cannot delete nodes because there is no node to be deleted.",
+		)
+	}
+	for i, node := range nodesToDelete {
+		if node == nil {
+			scaleDownStatus.Result = status.ScaleDownError
+			return scaleDownStatus, errors.NewAutoscalerError(
+				errors.InternalError,
+				fmt.Sprintf("cannot delete nodes because the node at index %d of to-be-deleted nodes is nil.", i),
+			)
+		}
 	}
 
 	// Taint all nodes that need drain synchronously, but don't start any drain/deletion yet. Otherwise, pods evicted from one to-be-deleted node
 	// could get recreated on another.
-	err = a.taintNodesSync(drainToDelete)
+	err := a.taintNodesSync(nodesToDelete)
 	if err != nil {
 		scaleDownStatus.Result = status.ScaleDownError
 		return scaleDownStatus, err
 	}
 
-	// All nodes involved in the scale-down should be tainted now - start draining and deleting nodes asynchronously.
-	drainScaledDown := a.deleteAsyncDrain(drainToDelete)
-	scaleDownStatus.ScaledDownNodes = append(scaleDownStatus.ScaledDownNodes, drainScaledDown...)
+	// Since gridscale provider only support single-node-group clusters, we just need to get nodeGroup from the first node of to-be-deleted nodes.
+	nodeGroup, cpErr := a.ctx.CloudProvider.NodeGroupForNode(nodesToDelete[0])
+	if cpErr != nil {
+		scaleDownStatus.Result = status.ScaleDownError
+		return scaleDownStatus, errors.NewAutoscalerError(errors.CloudProviderError, "failed to find node group for %s: %v", nodesToDelete[0].Name, cpErr)
+	}
 
+	var scaledDownNodes []*status.ScaleDownNode
+	for _, drainNode := range nodesToDelete {
+		if sdNode, err := a.scaleDownNodeToReport(drainNode, true); err == nil {
+			klog.V(0).Infof("Scale-down: removing node %s, utilization: %v, pods to reschedule: %s", drainNode.Name, sdNode.UtilInfo, joinPodNames(sdNode.EvictedPods))
+			a.ctx.LogRecorder.Eventf(apiv1.EventTypeNormal, "ScaleDown", "Scale-down: removing node %s, utilization: %v, pods to reschedule: %s", drainNode.Name, sdNode.UtilInfo, joinPodNames(sdNode.EvictedPods))
+			scaledDownNodes = append(scaledDownNodes, sdNode)
+		} else {
+			klog.Errorf("Scale-down: couldn't report scaled down node, err: %v", err)
+		}
+	}
+
+	// Drain to-be-deleted nodes synchronously.
+	finishFuncList, cpErr := a.drainNodesSyncForGridscaleProvider(nodeGroup.Id(), nodesToDelete)
+	if cpErr != nil {
+		scaleDownStatus.Result = status.ScaleDownError
+		return scaleDownStatus, errors.NewAutoscalerError(errors.CloudProviderError, "failed to drain nodes: %v", cpErr)
+	}
+
+	// Delete the last n nodes in the cluster.
+	cpErr = nodeGroup.DeleteNodes(nodesToDelete)
+	if cpErr != nil {
+		for _, finishFunc := range finishFuncList {
+			finishFunc(status.NodeDeleteErrorFailedToDelete, cpErr)
+		}
+		scaleDownStatus.Result = status.ScaleDownError
+		return scaleDownStatus, errors.NewAutoscalerError(errors.CloudProviderError, "failed to delete nodes: %v", cpErr)
+	}
+	scaleDownStatus.ScaledDownNodes = append(scaleDownStatus.ScaledDownNodes, scaledDownNodes...)
 	scaleDownStatus.Result = status.ScaleDownNodeDeleteStarted
 	return scaleDownStatus, nil
 }
@@ -221,6 +288,34 @@ func (a *Actuator) taintNodesSync(nodes []*apiv1.Node) errors.AutoscalerError {
 		taintedNodes = append(taintedNodes, node)
 	}
 	return nil
+}
+
+func (a *Actuator) drainNodesSyncForGridscaleProvider(nodeGroupID string, nodes []*apiv1.Node) ([]func(resultType status.NodeDeleteResultType, err error), errors.AutoscalerError) {
+	var finishFuncList []func(resultType status.NodeDeleteResultType, err error)
+	for _, node := range nodes {
+		a.nodeDeletionTracker.StartDeletionWithDrain(nodeGroupID, node.Name)
+		evictionResults, err := a.evictor.DrainNode(a.ctx, node)
+		klog.V(4).Infof("Scale-down: drain results for node %s: %v", node.Name, evictionResults)
+		if err != nil {
+			a.nodeDeletionTracker.EndDeletion(nodeGroupID, node.Name, status.NodeDeleteResult{
+				Err:                err,
+				ResultType:         status.NodeDeleteErrorFailedToEvictPods,
+				PodEvictionResults: evictionResults,
+			})
+			a.ctx.Recorder.Eventf(node, apiv1.EventTypeWarning, "ScaleDownFailed", "failed to drain the node: %v", err)
+			return nil, errors.NewAutoscalerError(errors.ApiCallError, "couldn't drain node %q", node)
+		}
+		finishFunc := func(resultType status.NodeDeleteResultType, err error) {
+			result := status.NodeDeleteResult{
+				Err:                err,
+				ResultType:         resultType,
+				PodEvictionResults: evictionResults,
+			}
+			a.nodeDeletionTracker.EndDeletion(nodeGroupID, node.Name, result)
+		}
+		finishFuncList = append(finishFuncList, finishFunc)
+	}
+	return finishFuncList, nil
 }
 
 // deleteAsyncDrain asynchronously starts deletions with drain for all provided nodes. scaledDownNodes return value contains all nodes for which
