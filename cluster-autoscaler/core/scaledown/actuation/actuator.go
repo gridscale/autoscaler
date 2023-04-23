@@ -105,6 +105,43 @@ func (a *Actuator) StartDeletion(empty, drain []*apiv1.Node, currentTime time.Ti
 	return scaleDownStatus, nil
 }
 
+// StartDeletionForGridscaleProvider triggers a new deletion process for gridscale provider.
+func (a *Actuator) StartDeletionForGridscaleProvider(empty, drain, all []*apiv1.Node, currentTime time.Time) (*status.ScaleDownStatus, errors.AutoscalerError) {
+	defer func() { metrics.UpdateDuration(metrics.ScaleDownNodeDeletion, time.Now().Sub(currentTime)) }()
+	results, ts := a.nodeDeletionTracker.DeletionResults()
+	scaleDownStatus := &status.ScaleDownStatus{NodeDeleteResults: results, NodeDeleteResultsAsOf: ts}
+
+	emptyToDelete, drainToDelete := a.cropNodesToBudgets(empty, drain)
+	if len(emptyToDelete) == 0 && len(drainToDelete) == 0 {
+		scaleDownStatus.Result = status.ScaleDownNoNodeDeleted
+		return scaleDownStatus, nil
+	}
+
+	// Taint empty nodes synchronously, and immediately start deletions asynchronously. Because these nodes are empty, there's no risk that a pod from one
+	// to-be-deleted node gets recreated on another.
+	emptyScaledDown, err := a.taintSyncDeleteAsyncEmpty(emptyToDelete)
+	scaleDownStatus.ScaledDownNodes = append(scaleDownStatus.ScaledDownNodes, emptyScaledDown...)
+	if err != nil {
+		scaleDownStatus.Result = status.ScaleDownError
+		return scaleDownStatus, err
+	}
+
+	// Taint all nodes that need drain synchronously, but don't start any drain/deletion yet. Otherwise, pods evicted from one to-be-deleted node
+	// could get recreated on another.
+	err = a.taintNodesSync(drainToDelete)
+	if err != nil {
+		scaleDownStatus.Result = status.ScaleDownError
+		return scaleDownStatus, err
+	}
+
+	// All nodes involved in the scale-down should be tainted now - start draining and deleting nodes asynchronously.
+	drainScaledDown := a.deleteAsyncDrain(drainToDelete)
+	scaleDownStatus.ScaledDownNodes = append(scaleDownStatus.ScaledDownNodes, drainScaledDown...)
+
+	scaleDownStatus.Result = status.ScaleDownNodeDeleteStarted
+	return scaleDownStatus, nil
+}
+
 // cropNodesToBudgets crops the provided node lists to respect scale-down max parallelism budgets.
 func (a *Actuator) cropNodesToBudgets(empty, needDrain []*apiv1.Node) ([]*apiv1.Node, []*apiv1.Node) {
 	emptyInProgress, drainInProgress := a.nodeDeletionTracker.DeletionsInProgress()
