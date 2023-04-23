@@ -112,7 +112,6 @@ func (n *NodeGroup) IncreaseSize(delta int) error {
 func (n *NodeGroup) DeleteNodes(nodes []*apiv1.Node) error {
 	for _, node := range nodes {
 		klog.V(4).Infof("Deleting node %s from node group", node.Name)
-		klog.V(4).Infof("                   Node data: %v ", node)
 	}
 
 	targetSize := n.nodeCount - len(nodes)

@@ -1,4 +1,6 @@
 <!--TODO: Remove "previously referred to as master" references from this doc once this terminology is fully removed from k8s-->
+**NOTE**: This is a forked version of Cluster Autoscaler made for gridscale managed Kubernetes clusters. Some of the information in this document may not apply to the original version of Cluster Autoscaler. Please use the offical product documentation provided by gridscale.
+
 # Frequently Asked Questions
 
 # Older versions
