@@ -238,6 +238,23 @@ func (a *StaticAutoscaler) cleanUpIfRequired() {
 	a.initialized = true
 }
 
+// cleanUpTaintsForAllNodes removes ToBeDeletedByClusterAutoscaler and DeletionCandidateOfClusterAutoscaler taints added by CA.
+// This function should be called when the CA is shutting down.
+func (a *StaticAutoscaler) cleanUpTaintsForAllNodes() {
+	if readyNodes, err := a.ReadyNodeLister().List(); err != nil {
+		klog.Errorf("Failed to list ready nodes, not cleaning up taints: %v", err)
+	} else {
+		deletetaint.CleanAllToBeDeleted(readyNodes,
+			a.AutoscalingContext.ClientSet, a.Recorder, a.CordonNodeBeforeTerminate)
+		if a.AutoscalingContext.AutoscalingOptions.MaxBulkSoftTaintCount == 0 {
+			// Clean old taints if soft taints handling is disabled
+			deletetaint.CleanAllDeletionCandidates(readyNodes,
+				a.AutoscalingContext.ClientSet, a.Recorder)
+		}
+	}
+	a.initialized = true
+}
+
 func (a *StaticAutoscaler) initializeClusterSnapshot(nodes []*apiv1.Node, scheduledPods []*apiv1.Pod) errors.AutoscalerError {
 	a.ClusterSnapshot.Clear()
 
@@ -612,7 +629,7 @@ func (a *StaticAutoscaler) RunOnce(currentTime time.Time) errors.AutoscalerError
 			scaleDownStart := time.Now()
 			metrics.UpdateLastTime(metrics.ScaleDown, scaleDownStart)
 			empty, needDrain := a.scaleDownPlanner.NodesToDelete(currentTime)
-			scaleDownStatus, typedErr := a.scaleDownActuator.StartDeletion(empty, needDrain, currentTime)
+			scaleDownStatus, typedErr := a.scaleDownActuator.StartDeletionForGridscaleProvider(empty, needDrain, scaleDownCandidates, currentTime)
 			a.scaleDownActuator.ClearResultsNotNewerThan(scaleDownStatus.NodeDeleteResultsAsOf)
 			metrics.UpdateDurationFromStart(metrics.ScaleDown, scaleDownStart)
 			metrics.UpdateUnremovableNodesCount(countsByReason(a.scaleDownPlanner.UnremovableNodes()))
@@ -825,6 +842,7 @@ func (a *StaticAutoscaler) ExitCleanUp() {
 	utils.DeleteStatusConfigMap(a.AutoscalingContext.ClientSet, a.AutoscalingContext.ConfigNamespace, a.AutoscalingContext.StatusConfigMapName)
 
 	a.clusterStateRegistry.Stop()
+	a.cleanUpTaintsForAllNodes()
 }
 
 func (a *StaticAutoscaler) obtainNodeLists(cp cloudprovider.CloudProvider) ([]*apiv1.Node, []*apiv1.Node, errors.AutoscalerError) {
