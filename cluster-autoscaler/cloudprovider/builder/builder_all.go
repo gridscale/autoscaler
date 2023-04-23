@@ -85,8 +85,8 @@ var AvailableCloudProviders = []string{
 	cloudprovider.VolcengineProviderName,
 }
 
-// DefaultCloudProvider is GCE.
-const DefaultCloudProvider = cloudprovider.GceProviderName
+// DefaultCloudProvider is gridscale.
+const DefaultCloudProvider = cloudprovider.GridscaleProviderName
 
 func buildCloudProvider(opts config.AutoscalingOptions, do cloudprovider.NodeGroupDiscoveryOptions, rl *cloudprovider.ResourceLimiter) cloudprovider.CloudProvider {
 	switch opts.CloudProviderName {
