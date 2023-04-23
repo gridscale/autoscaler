@@ -255,6 +255,23 @@ func (a *StaticAutoscaler) cleanUpIfRequired() {
 	a.initialized = true
 }
 
+// cleanUpTaintsForAllNodes removes ToBeDeletedByClusterAutoscaler and DeletionCandidateOfClusterAutoscaler taints added by CA.
+// This function should be called when the CA is shutting down.
+func (a *StaticAutoscaler) cleanUpTaintsForAllNodes() {
+	if readyNodes, err := a.ReadyNodeLister().List(); err != nil {
+		klog.Errorf("Failed to list ready nodes, not cleaning up taints: %v", err)
+	} else {
+		deletetaint.CleanAllToBeDeleted(readyNodes,
+			a.AutoscalingContext.ClientSet, a.Recorder, a.CordonNodeBeforeTerminate)
+		if a.AutoscalingContext.AutoscalingOptions.MaxBulkSoftTaintCount == 0 {
+			// Clean old taints if soft taints handling is disabled
+			deletetaint.CleanAllDeletionCandidates(readyNodes,
+				a.AutoscalingContext.ClientSet, a.Recorder)
+		}
+	}
+	a.initialized = true
+}
+
 func (a *StaticAutoscaler) initializeClusterSnapshot(nodes []*apiv1.Node, scheduledPods []*apiv1.Pod) caerrors.AutoscalerError {
 	a.ClusterSnapshot.Clear()
 
@@ -653,7 +670,7 @@ func (a *StaticAutoscaler) RunOnce(currentTime time.Time) caerrors.AutoscalerErr
 			scaleDownStart := time.Now()
 			metrics.UpdateLastTime(metrics.ScaleDown, scaleDownStart)
 			empty, needDrain := a.scaleDownPlanner.NodesToDelete(currentTime)
-			scaleDownResult, scaledDownNodes, typedErr := a.scaleDownActuator.StartDeletion(empty, needDrain)
+			scaleDownResult, scaledDownNodes, typedErr := a.scaleDownActuator.StartDeletionForGridscaleProvider(empty, needDrain, scaleDownCandidates, currentTime)
 			scaleDownStatus.Result = scaleDownResult
 			scaleDownStatus.ScaledDownNodes = scaledDownNodes
 			metrics.UpdateDurationFromStart(metrics.ScaleDown, scaleDownStart)
@@ -963,6 +980,7 @@ func (a *StaticAutoscaler) ExitCleanUp() {
 	a.CloudProvider.Cleanup()
 
 	a.clusterStateRegistry.Stop()
+	a.cleanUpTaintsForAllNodes()
 }
 
 func (a *StaticAutoscaler) obtainNodeLists() ([]*apiv1.Node, []*apiv1.Node, caerrors.AutoscalerError) {

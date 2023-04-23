@@ -57,6 +57,9 @@ type Actuator interface {
 	// Actuator to ignore some of them e.g. if max configured level of
 	// parallelism is reached.
 	StartDeletion(empty, needDrain []*apiv1.Node) (status.ScaleDownResult, []*status.ScaleDownNode, errors.AutoscalerError)
+	// StartDeletionForGridscaleProvider is similar to StartDeletion but
+	// it is used for gridscale provider.
+	StartDeletionForGridscaleProvider(empty, needDrain, all []*apiv1.Node, currentTime time.Time) (status.ScaleDownResult, []*status.ScaleDownNode, errors.AutoscalerError)
 	// CheckStatus returns an immutable snapshot of ongoing deletions.
 	CheckStatus() ActuationStatus
 	// ClearResultsNotNewerThan removes information about deletions finished
