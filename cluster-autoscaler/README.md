@@ -3,6 +3,8 @@
 
 # Introduction
 
+**NOTE**: This is a forked version of Cluster Autoscaler made for gridscale managed Kubernetes clusters.
+
 Cluster Autoscaler is a tool that automatically adjusts the size of the Kubernetes cluster when one of the following conditions is true:
 * there are pods that failed to run in the cluster due to insufficient
   resources.
