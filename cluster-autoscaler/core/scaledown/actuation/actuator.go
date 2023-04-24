@@ -19,6 +19,7 @@ package actuation
 import (
 	"fmt"
 	"reflect"
+	"sort"
 	"strings"
 	"time"
 
@@ -137,28 +138,30 @@ func (a *Actuator) StartDeletionForGridscaleProvider(empty, drain, all []*apiv1.
 			"cannot delete nodes because the number of nodes to be deleted is greater than or equal to the number of nodes in the cluster. There has to be at least one node left in the cluster.",
 		)
 	}
-	nodeNameListString := "\tEmpty nodes: "
+	klog.V(4).Info("[**]Original empty nodes to delete: ", len(emptyToDelete))
 	for _, node := range emptyToDelete {
-		nodeNameListString += node.Name + ", "
+		klog.V(4).Infof("\t-\t%s\n", node.Name)
 	}
-	nodeNameListString += "\n\tDrain nodes: "
+	klog.V(4).Info("[**]Original drain nodes to delete: ", len(drainToDelete))
 	for _, node := range drainToDelete {
-		nodeNameListString += node.Name + ", "
+		klog.V(4).Infof("\t-\t%s\n", node.Name)
 	}
-	nodeNameListString += "\n"
-	klog.V(4).Infof("Original to-be-removed nodes: \n%s", nodeNameListString)
 
+	// copy the all nodes (for safety) to a new slice and sort it
+	copiedAll := make([]*apiv1.Node, len(all))
+	copy(copiedAll, all)
+	sort.Slice(copiedAll, func(i, j int) bool {
+		return copiedAll[i].Name < copiedAll[j].Name
+	})
 	// Replace the to-be-deleted nodes with the last n nodes in the cluster.
 	var nodesToDelete []*apiv1.Node
 	if nodesToDeleteCount > 0 {
-		nodesToDelete = all[len(all)-nodesToDeleteCount:]
+		nodesToDelete = copiedAll[len(copiedAll)-nodesToDeleteCount:]
 	}
-	newNodeNameListString := "\tTo-be-deleted gsk nodes: "
+	klog.V(4).Info("[**]New empty nodes to delete: ", len(emptyToDelete))
 	for _, node := range nodesToDelete {
-		newNodeNameListString += node.Name + ", "
+		klog.V(4).Infof("\t-\t%s\n", node.Name)
 	}
-	newNodeNameListString += "\n"
-	klog.V(5).Infof("New to-be-removed nodes: \n%s", newNodeNameListString)
 
 	// do some sanity check
 	if len(nodesToDelete) <= 0 {

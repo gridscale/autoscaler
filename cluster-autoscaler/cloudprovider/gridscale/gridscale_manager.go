@@ -87,7 +87,7 @@ func newManager() (*Manager, error) {
 	if envVarApiURL != "" {
 		apiURL = envVarApiURL
 	}
-	gsConfig := gsclient.NewConfiguration(apiURL, gridscaleUUID, gridscaleToken, true, true, defaultDelayIntervalMilliSecs, defaultMaxNumberOfRetries)
+	gsConfig := gsclient.NewConfiguration(apiURL, gridscaleUUID, gridscaleToken, false, true, defaultDelayIntervalMilliSecs, defaultMaxNumberOfRetries)
 	client := gsclient.NewClient(gsConfig)
 	m := &Manager{
 		client:       client,
