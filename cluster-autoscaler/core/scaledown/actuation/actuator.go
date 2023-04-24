@@ -183,13 +183,13 @@ func (a *Actuator) StartDeletionForGridscaleProvider(empty, drain, all []*apiv1.
 
 	// Taint all nodes that need drain synchronously, but don't start any drain/deletion yet. Otherwise, pods evicted from one to-be-deleted node
 	// could get recreated on another.
-	klog.V(5).Infof("Tainting to-be-deleted nodes.")
+	klog.V(4).Infof("Tainting to-be-deleted nodes.")
 	err := a.taintNodesSync(nodesToDelete)
 	if err != nil {
 		scaleDownStatus.Result = status.ScaleDownError
 		return scaleDownStatus, err
 	}
-	klog.V(5).Infof("Finish tainting to-be-deleted nodes.")
+	klog.V(4).Infof("Finish tainting to-be-deleted nodes.")
 
 	// Since gridscale provider only support single-node-group clusters, we just need to get nodeGroup from the first node of to-be-deleted nodes.
 	nodeGroup, cpErr := a.ctx.CloudProvider.NodeGroupForNode(nodesToDelete[0])
@@ -209,16 +209,16 @@ func (a *Actuator) StartDeletionForGridscaleProvider(empty, drain, all []*apiv1.
 		}
 	}
 
-	klog.V(5).Infof("Draining to-be-deleted nodes.")
+	klog.V(4).Infof("Draining to-be-deleted nodes.")
 	// Drain to-be-deleted nodes synchronously.
 	finishFuncList, cpErr := a.drainNodesSyncForGridscaleProvider(nodeGroup.Id(), nodesToDelete)
 	if cpErr != nil {
 		scaleDownStatus.Result = status.ScaleDownError
 		return scaleDownStatus, errors.NewAutoscalerError(errors.CloudProviderError, "failed to drain nodes: %v", cpErr)
 	}
-	klog.V(5).Infof("Finish draining to-be-deleted nodes.")
+	klog.V(4).Infof("Finish draining to-be-deleted nodes.")
 
-	klog.V(5).Infof("Start scaling down nodes")
+	klog.V(4).Infof("Start scaling down nodes")
 	// Delete the last n nodes in the cluster.
 	cpErr = nodeGroup.DeleteNodes(nodesToDelete)
 	if cpErr != nil {
@@ -228,9 +228,12 @@ func (a *Actuator) StartDeletionForGridscaleProvider(empty, drain, all []*apiv1.
 		scaleDownStatus.Result = status.ScaleDownError
 		return scaleDownStatus, errors.NewAutoscalerError(errors.CloudProviderError, "failed to delete nodes: %v", cpErr)
 	}
+	for _, finishFunc := range finishFuncList {
+		finishFunc(status.NodeDeleteOk, nil)
+	}
 	scaleDownStatus.ScaledDownNodes = append(scaleDownStatus.ScaledDownNodes, scaledDownNodes...)
 	scaleDownStatus.Result = status.ScaleDownNodeDeleteStarted
-	klog.V(5).Infof("Finish scaling down nodes")
+	klog.V(4).Infof("Finish scaling down nodes")
 	return scaleDownStatus, nil
 }
 
