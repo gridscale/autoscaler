@@ -163,6 +163,25 @@ func (a *Actuator) StartDeletionForGridscaleProvider(empty, drain, all []*apiv1.
 		klog.V(4).Infof("\t-\t%s\n", node.Name)
 	}
 
+	// Clean taint from OLD empty to-be-deleted nodes
+	for _, node := range emptyToDelete {
+		if _, err := deletetaint.CleanDeletionCandidate(node, a.ctx.ClientSet); err != nil {
+			klog.Warningf("failed to clean taint DeletionCandidateTaint from node %s: %v", node.Name, err)
+		}
+		if _, err := deletetaint.CleanToBeDeleted(node, a.ctx.ClientSet, a.ctx.CordonNodeBeforeTerminate); err != nil {
+			klog.Warningf("failed to clean taint ToBeDeletedTaint from node %s: %v", node.Name, err)
+		}
+	}
+	// Clean taint from OLD nonempty to-be-deleted nodes
+	for _, node := range drainToDelete {
+		if _, err := deletetaint.CleanDeletionCandidate(node, a.ctx.ClientSet); err != nil {
+			klog.Warningf("failed to clean taint DeletionCandidateTaint from node %s: %v", node.Name, err)
+		}
+		if _, err := deletetaint.CleanToBeDeleted(node, a.ctx.ClientSet, a.ctx.CordonNodeBeforeTerminate); err != nil {
+			klog.Warningf("failed to clean taint ToBeDeletedTaint from node %s: %v", node.Name, err)
+		}
+	}
+
 	// do some sanity check
 	if len(nodesToDelete) <= 0 {
 		scaleDownStatus.Result = status.ScaleDownError
@@ -189,6 +208,13 @@ func (a *Actuator) StartDeletionForGridscaleProvider(empty, drain, all []*apiv1.
 		scaleDownStatus.Result = status.ScaleDownError
 		return scaleDownStatus, err
 	}
+	// Clean taint from NEW to-be-deleted nodes after scale down. We don't care about the error here.
+	defer func() {
+		klog.V(4).Infof("Cleaning taint from to-be-deleted nodes.")
+		for _, node := range nodesToDelete {
+			_, _ = deletetaint.CleanToBeDeleted(node, a.ctx.ClientSet, a.ctx.CordonNodeBeforeTerminate)
+		}
+	}()
 	klog.V(4).Infof("Finish tainting to-be-deleted nodes.")
 
 	// Since gridscale provider only support single-node-group clusters, we just need to get nodeGroup from the first node of to-be-deleted nodes.
