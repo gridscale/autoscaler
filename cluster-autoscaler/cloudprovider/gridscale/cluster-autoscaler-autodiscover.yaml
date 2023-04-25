@@ -149,6 +149,8 @@ spec:
         prometheus.io/scrape: "true"
         prometheus.io/port: "8085"
     spec:
+      nodeSelector:
+        kubernetes.io/hostname: node-pool0-0
       priorityClassName: system-cluster-critical
       securityContext:
         runAsNonRoot: true
@@ -171,7 +173,7 @@ spec:
               memory: 600Mi
           command:
             - ./cluster-autoscaler
-            - --v=6
+            - --v=4
             - --stderrthreshold=info
             - --cloud-provider=gridscale
           env:
