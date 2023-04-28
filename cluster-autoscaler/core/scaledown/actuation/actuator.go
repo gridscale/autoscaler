@@ -359,13 +359,14 @@ func (a *Actuator) drainNodesSyncForGridscaleProvider(nodeGroupID string, nodes 
 			a.ctx.Recorder.Eventf(node, apiv1.EventTypeWarning, "ScaleDownFailed", "failed to drain the node: %v", err)
 			return nil, errors.NewAutoscalerError(errors.ApiCallError, "couldn't drain node %q", node)
 		}
+		nodeName := node.Name
 		finishFunc := func(resultType status.NodeDeleteResultType, err error) {
 			result := status.NodeDeleteResult{
 				Err:                err,
 				ResultType:         resultType,
 				PodEvictionResults: evictionResults,
 			}
-			a.nodeDeletionTracker.EndDeletion(nodeGroupID, node.Name, result)
+			a.nodeDeletionTracker.EndDeletion(nodeGroupID, nodeName, result)
 		}
 		finishFuncList = append(finishFuncList, finishFunc)
 	}
