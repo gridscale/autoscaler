@@ -212,7 +212,7 @@ func (a *Actuator) StartDeletionForGridscaleProvider(empty, drain, all []*apiv1.
 	defer func() {
 		klog.V(4).Infof("Cleaning taint from to-be-deleted nodes.")
 		for _, node := range nodesToDelete {
-			_, _ = deletetaint.CleanToBeDeleted(node, a.ctx.ClientSet, a.ctx.CordonNodeBeforeTerminate)
+			deletetaint.CleanToBeDeleted(node, a.ctx.ClientSet, a.ctx.CordonNodeBeforeTerminate)
 		}
 	}()
 	klog.V(4).Infof("Finish tainting to-be-deleted nodes.")
