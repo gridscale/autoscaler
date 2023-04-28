@@ -97,6 +97,11 @@ func newManager() (*Manager, error) {
 	}
 	gsConfig := gsclient.NewConfiguration(apiURL, gridscaleUUID, gridscaleToken, false, true, defaultDelayIntervalMilliSecs, defaultMaxNumberOfRetries)
 	client := gsclient.NewClient(gsConfig)
+	// check if gsk cluster exists
+	_, err = client.GetPaaSService(context.Background(), gskClusterUUID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get gsk cluster: %v", err)
+	}
 	m := &Manager{
 		client:       client,
 		clusterUUID:  gskClusterUUID,
