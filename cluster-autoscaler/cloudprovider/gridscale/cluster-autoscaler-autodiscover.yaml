@@ -160,7 +160,7 @@ spec:
           type: RuntimeDefault
       serviceAccountName: cluster-autoscaler
       containers:
-        - image: registry.kubecuddle.io/k8s/cluster-autoscaler:test
+        - image: registry.kubecuddle.io/k8s/cluster-autoscaler:0.0.1-beta
           name: cluster-autoscaler
           resources:
             limits:
