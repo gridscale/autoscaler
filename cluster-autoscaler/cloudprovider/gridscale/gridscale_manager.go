@@ -31,6 +31,8 @@ const (
 	defaultDelayIntervalMilliSecs = 5000
 	defaultMaxNumberOfRetries     = 5
 	defaultMinNodeCount           = 1
+
+	gridscaleK8sActiveStatus = "active"
 )
 
 type nodeGroupClient interface {
@@ -122,6 +124,10 @@ func (m *Manager) Refresh() error {
 	k8sCluster, err := m.client.GetPaaSService(ctx, m.clusterUUID)
 	if err != nil {
 		return err
+	}
+	// if k8s cluster's status is not active, return error
+	if k8sCluster.Properties.Status != gridscaleK8sActiveStatus {
+		return fmt.Errorf("k8s cluster status is not active: %s", k8sCluster.Properties.Status)
 	}
 	nodeCount, ok := k8sCluster.Properties.Parameters["k8s_worker_node_count"].(float64)
 	if !ok {
