@@ -100,6 +100,7 @@ func (n *NodeDeletionTracker) EndDeletion(nodeGroupId, nodeName string, result s
 	if n.deletionsPerNodeGroup[nodeGroupId] <= 0 {
 		delete(n.deletionsPerNodeGroup, nodeGroupId)
 	}
+	klog.V(4).Infof("++++++++++++EndDeletion: %s, %s", nodeGroupId, nodeName)
 	delete(n.emptyNodeDeletions, nodeName)
 	delete(n.drainedNodeDeletions, nodeName)
 }
@@ -108,7 +109,11 @@ func (n *NodeDeletionTracker) EndDeletion(nodeGroupId, nodeName string, result s
 func (n *NodeDeletionTracker) DeletionsInProgress() ([]string, []string) {
 	n.Lock()
 	defer n.Unlock()
-	return mapKeysSlice(n.emptyNodeDeletions), mapKeysSlice(n.drainedNodeDeletions)
+	keyEmptyNodeDeletions := mapKeysSlice(n.emptyNodeDeletions)
+	keyDrainedNodeDeletions := mapKeysSlice(n.drainedNodeDeletions)
+	klog.V(4).Infof("++++++++++++EmptyDeletionsInProgress: %v", keyEmptyNodeDeletions)
+	klog.V(4).Infof("++++++++++++DrainedDeletionsInProgress: %v", keyDrainedNodeDeletions)
+	return keyEmptyNodeDeletions, keyDrainedNodeDeletions
 }
 
 func mapKeysSlice(m map[string]bool) []string {
