@@ -30,6 +30,7 @@ const (
 	defaultGridscaleAPIURL        = "https://api.gridscale.io"
 	defaultDelayIntervalMilliSecs = 5000
 	defaultMaxNumberOfRetries     = 5
+	defaultMinNodeCount           = 1
 )
 
 type nodeGroupClient interface {
@@ -63,14 +64,15 @@ func newManager() (*Manager, error) {
 	if gskClusterUUID == "" {
 		return nil, errors.New("env var GRIDSCALE_GSK_UUID is not provided")
 	}
+	minNodeCount := defaultMinNodeCount
 	minNodeCountStr := os.Getenv("GRIDSCALE_GSK_MIN_NODE_COUNT")
-	if minNodeCountStr == "" {
-		return nil, errors.New("env var GRIDSCALE_GSK_MIN_NODE_COUNT is not provided")
-	}
-	// convert minNodeCount to int
-	minNodeCount, err := strconv.Atoi(minNodeCountStr)
-	if err != nil {
-		return nil, fmt.Errorf("env var GRIDSCALE_GSK_MIN_NODE_COUNT is not a valid integer: %v", err)
+	if minNodeCountStr != "" {
+		var err error
+		// convert minNodeCount to int
+		minNodeCount, err = strconv.Atoi(minNodeCountStr)
+		if err != nil {
+			return nil, fmt.Errorf("env var GRIDSCALE_GSK_MIN_NODE_COUNT is not a valid integer: %v", err)
+		}
 	}
 	// min node count must be at least 1
 	if minNodeCount < 1 {
