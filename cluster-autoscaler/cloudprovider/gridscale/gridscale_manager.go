@@ -80,16 +80,15 @@ func newManager() (*Manager, error) {
 	if maxNodeCountStr == "" {
 		return nil, errors.New("env var GRIDSCALE_GSK_MAX_NODE_COUNT is not provided")
 	}
-	// max node count must be larger than min node count
-	if maxNodeCountStr < minNodeCountStr {
-		return nil, errors.New("env var GRIDSCALE_GSK_MAX_NODE_COUNT must be larger than GRIDSCALE_GSK_MIN_NODE_COUNT")
-	}
 	// convert maxNodeCount to int
 	maxNodeCount, err := strconv.Atoi(maxNodeCountStr)
 	if err != nil {
 		return nil, fmt.Errorf("env var GRIDSCALE_GSK_MAX_NODE_COUNT is not a valid integer: %v", err)
 	}
-
+	// max node count must be larger than min node count
+	if maxNodeCount < minNodeCount {
+		return nil, errors.New("env var GRIDSCALE_GSK_MAX_NODE_COUNT must be larger than GRIDSCALE_GSK_MIN_NODE_COUNT")
+	}
 	apiURL := defaultGridscaleAPIURL
 	envVarApiURL := os.Getenv("GRIDSCALE_API_URL")
 	if envVarApiURL != "" {
