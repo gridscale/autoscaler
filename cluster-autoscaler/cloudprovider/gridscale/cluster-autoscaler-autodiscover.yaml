@@ -173,7 +173,6 @@ spec:
             - ./cluster-autoscaler
             - --v=4
             - --stderrthreshold=info
-            - --cloud-provider=gridscale
             - --namespace=gsk-autoscaler
           env:
             - name: GRIDSCALE_UUID
