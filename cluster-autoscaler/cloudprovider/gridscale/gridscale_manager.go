@@ -62,36 +62,36 @@ func newManager() (*Manager, error) {
 	if gridscaleToken == "" {
 		return nil, errors.New("env var GRIDSCALE_TOKEN is not provided")
 	}
-	gskClusterUUID := os.Getenv("GRIDSCALE_GSK_UUID")
+	gskClusterUUID := os.Getenv("CLUSTER_UUID")
 	if gskClusterUUID == "" {
-		return nil, errors.New("env var GRIDSCALE_GSK_UUID is not provided")
+		return nil, errors.New("env var CLUSTER_UUID is not provided")
 	}
 	minNodeCount := defaultMinNodeCount
-	minNodeCountStr := os.Getenv("GRIDSCALE_GSK_MIN_NODE_COUNT")
+	minNodeCountStr := os.Getenv("CLUSTER_MIN_NODE_COUNT")
 	if minNodeCountStr != "" {
 		var err error
 		// convert minNodeCount to int
 		minNodeCount, err = strconv.Atoi(minNodeCountStr)
 		if err != nil {
-			return nil, fmt.Errorf("env var GRIDSCALE_GSK_MIN_NODE_COUNT is not a valid integer: %v", err)
+			return nil, fmt.Errorf("env var CLUSTER_MIN_NODE_COUNT is not a valid integer: %v", err)
 		}
 	}
 	// min node count must be at least 1
 	if minNodeCount < 1 {
-		return nil, errors.New("env var GRIDSCALE_GSK_MIN_NODE_COUNT must be at least 1")
+		return nil, errors.New("env var CLUSTER_MIN_NODE_COUNT must be at least 1")
 	}
-	maxNodeCountStr := os.Getenv("GRIDSCALE_GSK_MAX_NODE_COUNT")
+	maxNodeCountStr := os.Getenv("CLUSTER_MAX_NODE_COUNT")
 	if maxNodeCountStr == "" {
-		return nil, errors.New("env var GRIDSCALE_GSK_MAX_NODE_COUNT is not provided")
+		return nil, errors.New("env var CLUSTER_MAX_NODE_COUNT is not provided")
 	}
 	// convert maxNodeCount to int
 	maxNodeCount, err := strconv.Atoi(maxNodeCountStr)
 	if err != nil {
-		return nil, fmt.Errorf("env var GRIDSCALE_GSK_MAX_NODE_COUNT is not a valid integer: %v", err)
+		return nil, fmt.Errorf("env var CLUSTER_MAX_NODE_COUNT is not a valid integer: %v", err)
 	}
 	// max node count must be larger than min node count
 	if maxNodeCount < minNodeCount {
-		return nil, errors.New("env var GRIDSCALE_GSK_MAX_NODE_COUNT must be larger than GRIDSCALE_GSK_MIN_NODE_COUNT")
+		return nil, errors.New("env var CLUSTER_MAX_NODE_COUNT must be larger than CLUSTER_MIN_NODE_COUNT")
 	}
 	apiURL := defaultGridscaleAPIURL
 	envVarApiURL := os.Getenv("GRIDSCALE_API_URL")

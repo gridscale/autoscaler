@@ -183,11 +183,11 @@ spec:
                 secretKeyRef:
                   name: cloud-config
                   key: gridscale-token
-            - name: GRIDSCALE_GSK_UUID
+            - name: CLUSTER_UUID
               value: "00000000-0000-0000-0000-000000000000"
-            - name: GRIDSCALE_GSK_MIN_NODE_COUNT
+            - name: CLUSTER_MIN_NODE_COUNT
               value: "1"
-            - name: GRIDSCALE_GSK_MAX_NODE_COUNT
+            - name: CLUSTER_MAX_NODE_COUNT
               value: "10"
           imagePullPolicy: "Always"
           securityContext:
