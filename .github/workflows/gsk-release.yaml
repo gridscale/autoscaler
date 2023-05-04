@@ -33,7 +33,7 @@ jobs:
         uses: docker/build-push-action@v2
         with:
           context: .
-          file: ./Dockerfile.amd64
+          file: ./cluster-autoscaler/Dockerfile.amd64
           push: true
           platforms: linux/arm64
           tags: registry.kubecuddle.io/k8s/cluster-autoscaler:${{ github.ref_name }}
