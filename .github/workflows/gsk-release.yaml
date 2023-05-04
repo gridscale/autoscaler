@@ -32,7 +32,7 @@ jobs:
       - name: Build and push Docker image for ARM64
         uses: docker/build-push-action@v2
         with:
-          context: .
+          context: ./cluster-autoscaler
           file: ./cluster-autoscaler/Dockerfile.amd64
           push: true
           platforms: linux/arm64
