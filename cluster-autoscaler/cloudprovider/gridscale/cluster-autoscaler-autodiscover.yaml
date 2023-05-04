@@ -149,8 +149,6 @@ spec:
         prometheus.io/scrape: "true"
         prometheus.io/port: "8085"
     spec:
-      nodeSelector:
-        kubernetes.io/hostname: node-pool0-0
       priorityClassName: system-cluster-critical
       securityContext:
         runAsNonRoot: true
