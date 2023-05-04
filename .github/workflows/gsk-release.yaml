@@ -17,11 +17,10 @@ jobs:
         with:
           go-version: 1.19
 
-      - name: Change directory to cluster-autoscaler
+      - name: Change directory to cluster-autoscaler and build binary
         working-directory: ./cluster-autoscaler
-
-      - name: Build Cluster Autoscaler binary
-        run: make build-arch-amd64
+        run: |
+          make build-arch-amd64
 
       - name: Login to Docker registry
         uses: docker/login-action@v1
