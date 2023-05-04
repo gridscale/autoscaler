@@ -6,8 +6,8 @@ metadata:
 data:
   # insert your base64 encoded gridscale access id and key here, ensure there's no trailing newline:
   # such as:  echo -n "token" | base64
-  gridscale-uuid: "<BASE64_GRIDSCALE_UUID>"
-  gridscale-token: "<BASE64_GRIDSCALE_TOKEN>"
+  gridscale-uuid: "<BASE64_API_UUID>"
+  gridscale-token: "<BASE64_API_TOKEN>"
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -173,12 +173,12 @@ spec:
             - --stderrthreshold=info
             - --namespace=gsk-autoscaler
           env:
-            - name: GRIDSCALE_UUID
+            - name: API_UUID
               valueFrom:
                 secretKeyRef:
                   name: cloud-config
                   key: gridscale-uuid
-            - name: GRIDSCALE_TOKEN
+            - name: API_TOKEN
               valueFrom:
                 secretKeyRef:
                   name: cloud-config

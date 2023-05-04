@@ -54,13 +54,13 @@ type Manager struct {
 }
 
 func newManager() (*Manager, error) {
-	gridscaleUUID := os.Getenv("GRIDSCALE_UUID")
+	gridscaleUUID := os.Getenv("API_UUID")
 	if gridscaleUUID == "" {
-		return nil, errors.New("env var GRIDSCALE_UUID is not provided")
+		return nil, errors.New("env var API_UUID is not provided")
 	}
-	gridscaleToken := os.Getenv("GRIDSCALE_TOKEN")
+	gridscaleToken := os.Getenv("API_TOKEN")
 	if gridscaleToken == "" {
-		return nil, errors.New("env var GRIDSCALE_TOKEN is not provided")
+		return nil, errors.New("env var API_TOKEN is not provided")
 	}
 	gskClusterUUID := os.Getenv("CLUSTER_UUID")
 	if gskClusterUUID == "" {
@@ -94,7 +94,7 @@ func newManager() (*Manager, error) {
 		return nil, errors.New("env var CLUSTER_MAX_NODE_COUNT must be larger than CLUSTER_MIN_NODE_COUNT")
 	}
 	apiURL := defaultGridscaleAPIURL
-	envVarApiURL := os.Getenv("GRIDSCALE_API_URL")
+	envVarApiURL := os.Getenv("API_API_URL")
 	if envVarApiURL != "" {
 		apiURL = envVarApiURL
 	}
