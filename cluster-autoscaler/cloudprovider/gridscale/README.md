@@ -2,6 +2,7 @@
 gridscale managed Kubernetes cluster-autoscaler is a tool that automatically adjusts the size of the Kubernetes cluster when the load changes. When the load is high, the cluster-autoscaler increases the size of the cluster, and when the load is low, it decreases the size of the cluster. 
 
 **Note**: The cluster-autoscaler currently supports gridscale managed Kubernetes clusters with version ~> 1.25.
+
 **Note 2**: Currently, gridscale managed k8s only supports scaling down the last nodes. Due to that limitation of the gridscale API, a forked version of the cluster-autoscaler is used. 
 
 ## cluster-autoscaler deployment
