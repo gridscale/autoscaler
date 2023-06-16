@@ -172,6 +172,7 @@ spec:
             - --v=4
             - --stderrthreshold=info
             - --namespace=gsk-autoscaler
+            - --daemonset-eviction-for-occupied-nodes=false
           env:
             - name: API_UUID
               valueFrom:
