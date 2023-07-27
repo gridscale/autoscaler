@@ -66,30 +66,28 @@ func (d *gridscaleCloudProvider) NodeGroups() []cloudprovider.NodeGroup {
 // occurred. Must be implemented.
 func (d *gridscaleCloudProvider) NodeGroupForNode(node *apiv1.Node) (cloudprovider.NodeGroup, error) {
 	providerID := node.Spec.ProviderID
-	nodeID := toNodeID(providerID)
 
-	klog.V(5).Infof("checking nodegroup for node ID: %q", nodeID)
+	klog.V(4).Infof("checking nodegroup for node ID: %q", providerID)
 
 	// NOTE(arslan): the number of node groups per cluster is usually very
 	// small. So even though this looks like quadratic runtime, it's OK to
 	// proceed with this.
 	for _, group := range d.manager.nodeGroups {
-		klog.V(5).Infof("iterating over node group %q", group.Id())
-		nodes, err := group.Nodes()
+		klog.V(4).Infof("iterating over node group %q", group.Id())
+		nodesFromGroup, err := group.Nodes()
 		if err != nil {
 			return nil, err
 		}
 
-		for _, node := range nodes {
-			klog.V(6).Infof("checking node has: %q want: %q. %v", node.Id, providerID, node.Id == providerID)
+		for _, nodeFromGroup := range nodesFromGroup {
+			nodeID := toNodeID(nodeFromGroup.Id)
+			klog.V(4).Infof("checking node id %q is a substring of %q.", nodeID, providerID)
 			// CA uses node.Spec.ProviderID when looking for (un)registered nodes,
 			// so we need to use it here too.
-			if node.Id != providerID {
-				klog.V(5).Infof("CONTINUE checking nodegroup for node ID: %q", node.Id)
-				continue
+			if strings.Contains(providerID, nodeID) {
+				klog.V(4).Infof("FOUND nodegroup %q for node %q.", group.Id(), nodeID)
+				return group, nil
 			}
-
-			return group, nil
 		}
 	}
 
