@@ -34,6 +34,7 @@ import (
 var (
 	// ErrNodePoolNotExist is return if no node pool exists for a given cluster ID
 	ErrNodePoolNotExist = errors.New("node pool does not exist")
+	gskNodeCountParam   = "k8s_worker_node_count"
 )
 
 // NodeGroup implements cloudprovider.NodeGroup interface. NodeGroup contains
@@ -87,14 +88,18 @@ func (n *NodeGroup) IncreaseSize(delta int) error {
 	if err != nil {
 		return err
 	}
+
+	currentParamWNewNodeCount := make(map[string]interface{})
+	for k, v := range k8sCluster.Properties.Parameters {
+		if k == gskNodeCountParam {
+			currentParamWNewNodeCount[k] = targetSize
+			continue
+		}
+		currentParamWNewNodeCount[k] = v
+	}
+
 	updateRequestBody := gsclient.PaaSServiceUpdateRequest{
-		Parameters: map[string]interface{}{
-			"k8s_worker_node_count":        targetSize,
-			"k8s_worker_node_ram":          k8sCluster.Properties.Parameters["k8s_worker_node_ram"],
-			"k8s_worker_node_cores":        k8sCluster.Properties.Parameters["k8s_worker_node_cores"],
-			"k8s_worker_node_storage":      k8sCluster.Properties.Parameters["k8s_worker_node_storage"],
-			"k8s_worker_node_storage_type": k8sCluster.Properties.Parameters["k8s_worker_node_storage_type"],
-		},
+		Parameters: currentParamWNewNodeCount,
 	}
 	err = n.client.UpdatePaaSService(ctx, n.clusterUUID, updateRequestBody)
 	if err != nil {
@@ -120,14 +125,18 @@ func (n *NodeGroup) DeleteNodes(nodes []*apiv1.Node) error {
 	if err != nil {
 		return err
 	}
+
+	currentParamWNewNodeCount := make(map[string]interface{})
+	for k, v := range k8sCluster.Properties.Parameters {
+		if k == gskNodeCountParam {
+			currentParamWNewNodeCount[k] = targetSize
+			continue
+		}
+		currentParamWNewNodeCount[k] = v
+	}
+
 	updateRequestBody := gsclient.PaaSServiceUpdateRequest{
-		Parameters: map[string]interface{}{
-			"k8s_worker_node_count":        targetSize,
-			"k8s_worker_node_ram":          k8sCluster.Properties.Parameters["k8s_worker_node_ram"],
-			"k8s_worker_node_cores":        k8sCluster.Properties.Parameters["k8s_worker_node_cores"],
-			"k8s_worker_node_storage":      k8sCluster.Properties.Parameters["k8s_worker_node_storage"],
-			"k8s_worker_node_storage_type": k8sCluster.Properties.Parameters["k8s_worker_node_storage_type"],
-		},
+		Parameters: currentParamWNewNodeCount,
 	}
 	err = n.client.UpdatePaaSService(ctx, n.clusterUUID, updateRequestBody)
 	if err != nil {
@@ -159,14 +168,18 @@ func (n *NodeGroup) DecreaseTargetSize(delta int) error {
 	if err != nil {
 		return err
 	}
+
+	currentParamWNewNodeCount := make(map[string]interface{})
+	for k, v := range k8sCluster.Properties.Parameters {
+		if k == gskNodeCountParam {
+			currentParamWNewNodeCount[k] = targetSize
+			continue
+		}
+		currentParamWNewNodeCount[k] = v
+	}
+
 	updateRequestBody := gsclient.PaaSServiceUpdateRequest{
-		Parameters: map[string]interface{}{
-			"k8s_worker_node_count":        targetSize,
-			"k8s_worker_node_ram":          k8sCluster.Properties.Parameters["k8s_worker_node_ram"],
-			"k8s_worker_node_cores":        k8sCluster.Properties.Parameters["k8s_worker_node_cores"],
-			"k8s_worker_node_storage":      k8sCluster.Properties.Parameters["k8s_worker_node_storage"],
-			"k8s_worker_node_storage_type": k8sCluster.Properties.Parameters["k8s_worker_node_storage_type"],
-		},
+		Parameters: currentParamWNewNodeCount,
 	}
 	err = n.client.UpdatePaaSService(ctx, n.clusterUUID, updateRequestBody)
 	if err != nil {
