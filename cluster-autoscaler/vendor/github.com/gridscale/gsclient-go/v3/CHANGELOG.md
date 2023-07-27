@@ -1,5 +1,20 @@
 # Changelog
 
+## 3.13.0 (Jul 4, 2023)
+
+FEATURES:
+- Support proxy protocol for loadbalancer backends [#227](https://github.com/gridscale/gsclient-go/pull/227)
+
+## 3.12.1 (May 19, 2023)
+
+BUG FIXES:
+- (Hot fix) Add missing `comment` and `user_uuid` fields to object storage access key create/update operations [#226](https://github.com/gridscale/gsclient-go/pull/226).
+
+## 3.12.0 (May 09, 2023)
+
+FEATURES:
+- Allow to set `user-data` in server create/update operations [#225](https://github.com/gridscale/gsclient-go/pull/225).
+
 ## 3.11.1 (Jan 04, 2023)
 
 BUG FIXES:
