@@ -34,7 +34,6 @@ import (
 
 	apiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/sets"
 	schedulerframework "k8s.io/kubernetes/pkg/scheduler/framework"
 
 	klog "k8s.io/klog/v2"
@@ -977,22 +976,12 @@ func (csr *ClusterStateRegistry) getCloudProviderNodeInstances() (map[string][]c
 }
 
 // Calculates which of the existing cloud provider nodes are not registered in Kubernetes.
+// NOTE: Temporarily remove the implementation of this function for gridscale provider. Because
+// there is an issue that the nodes in gridscale whitelabel partner are considered as not registered
+// in gsk Kubernetes.
 func getNotRegisteredNodes(allNodes []*apiv1.Node, cloudProviderNodeInstances map[string][]cloudprovider.Instance, time time.Time) []UnregisteredNode {
-	registered := sets.NewString()
-	for _, node := range allNodes {
-		registered.Insert(node.Spec.ProviderID)
-	}
 	notRegistered := make([]UnregisteredNode, 0)
-	for _, instances := range cloudProviderNodeInstances {
-		for _, instance := range instances {
-			if !registered.Has(instance.Id) {
-				notRegistered = append(notRegistered, UnregisteredNode{
-					Node:              fakeNode(instance, cloudprovider.FakeNodeUnregistered),
-					UnregisteredSince: time,
-				})
-			}
-		}
-	}
+	klog.V(4).Info("Skipping GetNotRegisteredNodes for gridscale provider and its whitelable partners")
 	return notRegistered
 }
 
