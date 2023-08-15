@@ -81,7 +81,7 @@ func (d *gridscaleCloudProvider) NodeGroupForNode(node *apiv1.Node) (cloudprovid
 
 		for _, nodeFromGroup := range nodesFromGroup {
 			nodeID := toNodeID(nodeFromGroup.Id)
-			klog.V(4).Infof("checking node id %q is a substring of %q. %s", nodeID, providerID, postFix)
+			klog.V(4).Infof("checking node id %q is a substring of %q.", nodeID, providerID)
 			// CA uses node.Spec.ProviderID when looking for (un)registered nodes,
 			// so we need to use it here too.
 			if strings.Contains(providerID, nodeID) {
