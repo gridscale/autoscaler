@@ -242,11 +242,11 @@ func (a *StaticAutoscaler) cleanUpTaintsForAllNodes() {
 	if readyNodes, err := a.ReadyNodeLister().List(); err != nil {
 		klog.Errorf("Failed to list ready nodes, not cleaning up taints: %v", err)
 	} else {
-		deletetaint.CleanAllToBeDeleted(readyNodes,
+		taints.CleanAllToBeDeleted(readyNodes,
 			a.AutoscalingContext.ClientSet, a.Recorder, a.CordonNodeBeforeTerminate)
 		if a.AutoscalingContext.AutoscalingOptions.MaxBulkSoftTaintCount == 0 {
 			// Clean old taints if soft taints handling is disabled
-			deletetaint.CleanAllDeletionCandidates(readyNodes,
+			taints.CleanAllDeletionCandidates(readyNodes,
 				a.AutoscalingContext.ClientSet, a.Recorder)
 		}
 	}

@@ -143,8 +143,15 @@ func (a *Actuator) StartDeletionForGridscaleProvider(empty, drain, all []*apiv1.
 	defer func() { metrics.UpdateDuration(metrics.ScaleDownNodeDeletion, time.Now().Sub(currentTime)) }()
 	results, ts := a.nodeDeletionTracker.DeletionResults()
 	scaleDownStatus := &status.ScaleDownStatus{NodeDeleteResults: results, NodeDeleteResultsAsOf: ts}
-
-	emptyToDelete, drainToDelete := a.budgetProcessor.CropNodes(a.nodeDeletionTracker, empty, drain)
+	emptyToDelete := []*apiv1.Node{}
+	drainToDelete := []*apiv1.Node{}
+	emptyToDeleteNodeGroupViews, drainToDeleteNodeGroupViews := a.budgetProcessor.CropNodes(a.nodeDeletionTracker, empty, drain)
+	for _, bucket := range emptyToDeleteNodeGroupViews {
+		emptyToDelete = append(emptyToDelete, bucket.Nodes...)
+	}
+	for _, bucket := range drainToDeleteNodeGroupViews {
+		drainToDelete = append(drainToDelete, bucket.Nodes...)
+	}
 	if len(emptyToDelete) == 0 && len(drainToDelete) == 0 {
 		scaleDownStatus.Result = status.ScaleDownNoNodeDeleted
 		return scaleDownStatus, nil
@@ -224,10 +231,16 @@ func (a *Actuator) StartDeletionForGridscaleProvider(empty, drain, all []*apiv1.
 		}
 	}
 
+	nodesToDeleteNodeGroupViews := []*budgets.NodeGroupView{
+		&budgets.NodeGroupView{
+			Nodes: nodesToDelete,
+		},
+	}
+
 	// Taint all nodes that need drain synchronously, but don't start any drain/deletion yet. Otherwise, pods evicted from one to-be-deleted node
 	// could get recreated on another.
 	klog.V(4).Infof("Tainting to-be-deleted nodes.")
-	err := a.taintNodesSync(nodesToDelete)
+	err := a.taintNodesSync(nodesToDeleteNodeGroupViews)
 	if err != nil {
 		scaleDownStatus.Result = status.ScaleDownError
 		return scaleDownStatus, err
@@ -335,9 +348,25 @@ func (a *Actuator) taintNodesSync(NodeGroupViews []*budgets.NodeGroupView) error
 
 func (a *Actuator) drainNodesSyncForGridscaleProvider(nodeGroupID string, nodes []*apiv1.Node) ([]func(resultType status.NodeDeleteResultType, err error), errors.AutoscalerError) {
 	var finishFuncList []func(resultType status.NodeDeleteResultType, err error)
+	clusterSnapshot, err := a.createSnapshot(nodes)
+	if err != nil {
+		klog.Errorf("Scale-down: couldn't create delete snapshot, err: %v", err)
+		nodeDeleteResult := status.NodeDeleteResult{ResultType: status.NodeDeleteErrorInternal, Err: errors.NewAutoscalerError(errors.InternalError, "createSnapshot returned error %v", err)}
+		for _, node := range nodes {
+			a.nodeDeletionScheduler.AbortNodeDeletion(node, nodeGroupID, true, "failed to create delete snapshot", nodeDeleteResult)
+		}
+		return nil, errors.NewAutoscalerError(errors.InternalError, "couldn't create delete snapshot, err: %v", err)
+	}
 	for _, node := range nodes {
+		nodeInfo, err := clusterSnapshot.NodeInfos().Get(node.Name)
+		if err != nil {
+			klog.Errorf("Scale-down: can't retrieve node %q from snapshot, err: %v", node.Name, err)
+			nodeDeleteResult := status.NodeDeleteResult{ResultType: status.NodeDeleteErrorInternal, Err: errors.NewAutoscalerError(errors.InternalError, "nodeInfos.Get for %q returned error: %v", node.Name, err)}
+			a.nodeDeletionScheduler.AbortNodeDeletion(node, nodeGroupID, true, "failed to get node info", nodeDeleteResult)
+			continue
+		}
 		a.nodeDeletionTracker.StartDeletionWithDrain(nodeGroupID, node.Name)
-		evictionResults, err := a.evictor.DrainNode(a.ctx, node)
+		evictionResults, err := a.nodeDeletionScheduler.evictor.DrainNode(a.ctx, nodeInfo)
 		klog.V(4).Infof("Scale-down: drain results for node %s: %v", node.Name, evictionResults)
 		if err != nil {
 			a.nodeDeletionTracker.EndDeletion(nodeGroupID, node.Name, status.NodeDeleteResult{
