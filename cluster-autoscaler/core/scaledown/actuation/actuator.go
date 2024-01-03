@@ -182,19 +182,19 @@ func (a *Actuator) StartDeletionForGridscaleProvider(empty, drain, all []*apiv1.
 
 	// Clean taint from OLD empty to-be-deleted nodes
 	for _, node := range emptyToDelete {
-		if _, err := deletetaint.CleanDeletionCandidate(node, a.ctx.ClientSet); err != nil {
+		if _, err := taints.CleanDeletionCandidate(node, a.ctx.ClientSet); err != nil {
 			klog.Warningf("failed to clean taint DeletionCandidateTaint from node %s: %v", node.Name, err)
 		}
-		if _, err := deletetaint.CleanToBeDeleted(node, a.ctx.ClientSet, a.ctx.CordonNodeBeforeTerminate); err != nil {
+		if _, err := taints.CleanToBeDeleted(node, a.ctx.ClientSet, a.ctx.CordonNodeBeforeTerminate); err != nil {
 			klog.Warningf("failed to clean taint ToBeDeletedTaint from node %s: %v", node.Name, err)
 		}
 	}
 	// Clean taint from OLD nonempty to-be-deleted nodes
 	for _, node := range drainToDelete {
-		if _, err := deletetaint.CleanDeletionCandidate(node, a.ctx.ClientSet); err != nil {
+		if _, err := taints.CleanDeletionCandidate(node, a.ctx.ClientSet); err != nil {
 			klog.Warningf("failed to clean taint DeletionCandidateTaint from node %s: %v", node.Name, err)
 		}
-		if _, err := deletetaint.CleanToBeDeleted(node, a.ctx.ClientSet, a.ctx.CordonNodeBeforeTerminate); err != nil {
+		if _, err := taints.CleanToBeDeleted(node, a.ctx.ClientSet, a.ctx.CordonNodeBeforeTerminate); err != nil {
 			klog.Warningf("failed to clean taint ToBeDeletedTaint from node %s: %v", node.Name, err)
 		}
 	}
@@ -229,7 +229,7 @@ func (a *Actuator) StartDeletionForGridscaleProvider(empty, drain, all []*apiv1.
 	defer func() {
 		klog.V(4).Infof("Cleaning taint from to-be-deleted nodes.")
 		for _, node := range nodesToDelete {
-			deletetaint.CleanToBeDeleted(node, a.ctx.ClientSet, a.ctx.CordonNodeBeforeTerminate)
+			taints.CleanToBeDeleted(node, a.ctx.ClientSet, a.ctx.CordonNodeBeforeTerminate)
 		}
 	}()
 	klog.V(4).Infof("Finish tainting to-be-deleted nodes.")
@@ -361,9 +361,27 @@ func (a *Actuator) taintNodesSync(nodes []*apiv1.Node) errors.AutoscalerError {
 
 func (a *Actuator) drainNodesSyncForGridscaleProvider(nodeGroupID string, nodes []*apiv1.Node) ([]func(resultType status.NodeDeleteResultType, err error), errors.AutoscalerError) {
 	var finishFuncList []func(resultType status.NodeDeleteResultType, err error)
+	clusterSnapshot, err := a.createSnapshot(nodes)
+
+	if err != nil {
+		klog.Errorf("Scale-down: couldn't create delete snapshot, err: %v", err)
+		nodeDeleteResult := status.NodeDeleteResult{ResultType: status.NodeDeleteErrorInternal, Err: errors.NewAutoscalerError(errors.InternalError, "createSnapshot returned error %v", err)}
+		for _, node := range nodes {
+			CleanUpAndRecordFailedScaleDownEvent(a.ctx, node, nodeGroupID, true, a.nodeDeletionTracker, "failed to create delete snapshot", nodeDeleteResult)
+		}
+		return nil, errors.NewAutoscalerError(errors.InternalError, "createSnapshot returned error %v", err)
+	}
+
 	for _, node := range nodes {
+		nodeInfo, err := clusterSnapshot.NodeInfos().Get(node.Name)
+		if err != nil {
+			klog.Errorf("Scale-down: can't retrieve node %q from snapshot, err: %v", node.Name, err)
+			nodeDeleteResult := status.NodeDeleteResult{ResultType: status.NodeDeleteErrorInternal, Err: errors.NewAutoscalerError(errors.InternalError, "nodeInfos.Get for %q returned error: %v", node.Name, err)}
+			CleanUpAndRecordFailedScaleDownEvent(a.ctx, node, nodeGroupID, true, a.nodeDeletionTracker, "failed to get node info", nodeDeleteResult)
+			continue
+		}
 		a.nodeDeletionTracker.StartDeletionWithDrain(nodeGroupID, node.Name)
-		evictionResults, err := a.evictor.DrainNode(a.ctx, node)
+		evictionResults, err := a.evictor.DrainNode(a.ctx, nodeInfo)
 		klog.V(4).Infof("Scale-down: drain results for node %s: %v", node.Name, evictionResults)
 		if err != nil {
 			a.nodeDeletionTracker.EndDeletion(nodeGroupID, node.Name, status.NodeDeleteResult{
