@@ -158,6 +158,10 @@ func (d *gridscaleCloudProvider) Refresh() error {
 	return d.manager.Refresh()
 }
 
+func (d *gridscaleCloudProvider) GetNodeGpuConfig(node *apiv1.Node) *cloudprovider.GpuConfig {
+	return nil
+}
+
 // BuildGridscale builds the gridscale cloud provider.
 func BuildGridscale(
 	opts config.AutoscalingOptions,
