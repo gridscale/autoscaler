@@ -99,21 +99,13 @@ func (p *ScaleDownWrapper) StartDeletion(empty, needDrain []*apiv1.Node) (status
 }
 
 // StartDeletionForGridscaleProvider triggers an actual scale down logic for gridscale provider.
-func (p *ScaleDownWrapper) StartDeletionForGridscaleProvider(empty, needDrain, all []*apiv1.Node, currentTime time.Time) (*status.ScaleDownStatus, errors.AutoscalerError) {
+func (p *ScaleDownWrapper) StartDeletionForGridscaleProvider(empty, needDrain, all []*apiv1.Node) (status.ScaleDownResult, []*status.ScaleDownNode, errors.AutoscalerError) {
 	// Done to preserve legacy behavior, see comment on NodesToDelete.
 	if p.lastNodesToDeleteErr != nil || p.lastNodesToDeleteResult != status.ScaleDownNodeDeleteStarted {
-		// When there is no need for scale-down, p.lastNodesToDeleteResult is set to ScaleDownNoUnneeded. We have to still report node delete
-		// results in this case, otherwise they wouldn't get reported until the next call to actuator.StartDeletion (i.e. until the next scale-down
-		// attempt).
-		// Run actuator.StartDeletion with no nodes just to grab the delete results.
-		origStatus, _ := p.actuator.StartDeletionForGridscaleProvider(nil, nil, nil, currentTime)
-		return &status.ScaleDownStatus{
-			Result:                p.lastNodesToDeleteResult,
-			NodeDeleteResults:     origStatus.NodeDeleteResults,
-			NodeDeleteResultsAsOf: origStatus.NodeDeleteResultsAsOf,
-		}, p.lastNodesToDeleteErr
+		return p.lastNodesToDeleteResult, []*status.ScaleDownNode{}, p.lastNodesToDeleteErr
 	}
-	return p.actuator.StartDeletionForGridscaleProvider(empty, needDrain, all, currentTime)
+
+	return p.actuator.StartDeletionForGridscaleProvider(empty, needDrain, all)
 }
 
 // CheckStatus snapshots current deletion status

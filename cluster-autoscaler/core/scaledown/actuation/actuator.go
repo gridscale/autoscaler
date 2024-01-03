@@ -149,15 +149,21 @@ func (a *Actuator) StartDeletion(empty, drain []*apiv1.Node) (status.ScaleDownRe
 // 2. Replace the to-be-deleted nodes with the last n nodes in the cluster.
 // 3. Taint & drain the to-be-deleted nodes.
 // 4. Delete the last n nodes in the cluster.
-func (a *Actuator) StartDeletionForGridscaleProvider(empty, drain, all []*apiv1.Node, currentTime time.Time) (*status.ScaleDownStatus, errors.AutoscalerError) {
-	defer func() { metrics.UpdateDuration(metrics.ScaleDownNodeDeletion, time.Now().Sub(currentTime)) }()
-	results, ts := a.nodeDeletionTracker.DeletionResults()
-	scaleDownStatus := &status.ScaleDownStatus{NodeDeleteResults: results, NodeDeleteResultsAsOf: ts}
-
-	emptyToDelete, drainToDelete := a.budgetProcessor.CropNodes(a.nodeDeletionTracker, empty, drain)
+func (a *Actuator) StartDeletionForGridscaleProvider(empty, drain, all []*apiv1.Node) (status.ScaleDownResult, []*status.ScaleDownNode, errors.AutoscalerError) {
+	a.nodeDeletionScheduler.ResetAndReportMetrics()
+	deletionStartTime := time.Now()
+	defer func() { metrics.UpdateDuration(metrics.ScaleDownNodeDeletion, time.Since(deletionStartTime)) }()
+	emptyToDelete := []*apiv1.Node{}
+	drainToDelete := []*apiv1.Node{}
+	emptyToDeleteNodeGroupViews, drainToDeleteNodeGroupViews := a.budgetProcessor.CropNodes(a.nodeDeletionTracker, empty, drain)
+	for _, bucket := range emptyToDeleteNodeGroupViews {
+		emptyToDelete = append(emptyToDelete, bucket.Nodes...)
+	}
+	for _, bucket := range drainToDeleteNodeGroupViews {
+		drainToDelete = append(drainToDelete, bucket.Nodes...)
+	}
 	if len(emptyToDelete) == 0 && len(drainToDelete) == 0 {
-		scaleDownStatus.Result = status.ScaleDownNoNodeDeleted
-		return scaleDownStatus, nil
+		return status.ScaleDownNoNodeDeleted, nil, nil
 	}
 
 	// Count the number of nodes to be deleted.
@@ -166,8 +172,7 @@ func (a *Actuator) StartDeletionForGridscaleProvider(empty, drain, all []*apiv1.
 	if nodesToDeleteCount >= len(all) {
 		// If the number of nodes to be deleted is greater than or equal to the number of nodes in the cluster,
 		// we cannot delete the nodes. Return an error.
-		scaleDownStatus.Result = status.ScaleDownError
-		return scaleDownStatus, errors.NewAutoscalerError(
+		return status.ScaleDownError, nil, errors.NewAutoscalerError(
 			errors.InternalError,
 			"cannot delete nodes because the number of nodes to be deleted is greater than or equal to the number of nodes in the cluster. There has to be at least one node left in the cluster.",
 		)
@@ -218,29 +223,32 @@ func (a *Actuator) StartDeletionForGridscaleProvider(empty, drain, all []*apiv1.
 
 	// do some sanity check
 	if len(nodesToDelete) <= 0 {
-		scaleDownStatus.Result = status.ScaleDownError
-		return scaleDownStatus, errors.NewAutoscalerError(
+		return status.ScaleDownError, nil, errors.NewAutoscalerError(
 			errors.InternalError,
 			"cannot delete nodes because there is no node to be deleted.",
 		)
 	}
 	for i, node := range nodesToDelete {
 		if node == nil {
-			scaleDownStatus.Result = status.ScaleDownError
-			return scaleDownStatus, errors.NewAutoscalerError(
+			return status.ScaleDownError, nil, errors.NewAutoscalerError(
 				errors.InternalError,
 				fmt.Sprintf("cannot delete nodes because the node at index %d of to-be-deleted nodes is nil.", i),
 			)
 		}
 	}
 
+	nodesToDeleteNodeGroupViews := []*budgets.NodeGroupView{
+		&budgets.NodeGroupView{
+			Nodes: nodesToDelete,
+		},
+	}
+
 	// Taint all nodes that need drain synchronously, but don't start any drain/deletion yet. Otherwise, pods evicted from one to-be-deleted node
 	// could get recreated on another.
 	klog.V(4).Infof("Tainting to-be-deleted nodes.")
-	err := a.taintNodesSync(nodesToDelete)
+	err := a.taintNodesSync(nodesToDeleteNodeGroupViews)
 	if err != nil {
-		scaleDownStatus.Result = status.ScaleDownError
-		return scaleDownStatus, err
+		return status.ScaleDownError, nil, err
 	}
 	// Clean taint from NEW to-be-deleted nodes after scale down. We don't care about the error here.
 	defer func() {
@@ -254,8 +262,7 @@ func (a *Actuator) StartDeletionForGridscaleProvider(empty, drain, all []*apiv1.
 	// Since gridscale provider only support single-node-group clusters, we just need to get nodeGroup from the first node of to-be-deleted nodes.
 	nodeGroup, cpErr := a.ctx.CloudProvider.NodeGroupForNode(nodesToDelete[0])
 	if cpErr != nil {
-		scaleDownStatus.Result = status.ScaleDownError
-		return scaleDownStatus, errors.NewAutoscalerError(errors.CloudProviderError, "failed to find node group for %s: %v", nodesToDelete[0].Name, cpErr)
+		return status.ScaleDownError, nil, errors.NewAutoscalerError(errors.CloudProviderError, "failed to find node group for %s: %v", nodesToDelete[0].Name, cpErr)
 	}
 
 	var scaledDownNodes []*status.ScaleDownNode
@@ -273,8 +280,7 @@ func (a *Actuator) StartDeletionForGridscaleProvider(empty, drain, all []*apiv1.
 	// Drain to-be-deleted nodes synchronously.
 	finishFuncList, cpErr := a.drainNodesSyncForGridscaleProvider(nodeGroup.Id(), nodesToDelete)
 	if cpErr != nil {
-		scaleDownStatus.Result = status.ScaleDownError
-		return scaleDownStatus, errors.NewAutoscalerError(errors.CloudProviderError, "failed to drain nodes: %v", cpErr)
+		return status.ScaleDownError, nil, errors.NewAutoscalerError(errors.CloudProviderError, "failed to drain nodes: %v", cpErr)
 	}
 	klog.V(4).Infof("Finish draining to-be-deleted nodes.")
 
@@ -285,16 +291,13 @@ func (a *Actuator) StartDeletionForGridscaleProvider(empty, drain, all []*apiv1.
 		for _, finishFunc := range finishFuncList {
 			finishFunc(status.NodeDeleteErrorFailedToDelete, cpErr)
 		}
-		scaleDownStatus.Result = status.ScaleDownError
-		return scaleDownStatus, errors.NewAutoscalerError(errors.CloudProviderError, "failed to delete nodes: %v", cpErr)
+		return status.ScaleDownError, nil, errors.NewAutoscalerError(errors.CloudProviderError, "failed to delete nodes: %v", cpErr)
 	}
 	for _, finishFunc := range finishFuncList {
 		finishFunc(status.NodeDeleteOk, nil)
 	}
-	scaleDownStatus.ScaledDownNodes = append(scaleDownStatus.ScaledDownNodes, scaledDownNodes...)
-	scaleDownStatus.Result = status.ScaleDownNodeDeleteStarted
 	klog.V(4).Infof("Finish scaling down nodes")
-	return scaleDownStatus, nil
+	return status.ScaleDownNodeDeleteStarted, scaledDownNodes, nil
 }
 
 // deleteAsyncEmpty immediately starts deletions asynchronously.
@@ -366,9 +369,25 @@ func (a *Actuator) taintNodesSync(NodeGroupViews []*budgets.NodeGroupView) error
 
 func (a *Actuator) drainNodesSyncForGridscaleProvider(nodeGroupID string, nodes []*apiv1.Node) ([]func(resultType status.NodeDeleteResultType, err error), errors.AutoscalerError) {
 	var finishFuncList []func(resultType status.NodeDeleteResultType, err error)
+	clusterSnapshot, err := a.createSnapshot(nodes)
+	if err != nil {
+		klog.Errorf("Scale-down: couldn't create delete snapshot, err: %v", err)
+		nodeDeleteResult := status.NodeDeleteResult{ResultType: status.NodeDeleteErrorInternal, Err: errors.NewAutoscalerError(errors.InternalError, "createSnapshot returned error %v", err)}
+		for _, node := range nodes {
+			a.nodeDeletionScheduler.AbortNodeDeletion(node, nodeGroupID, true, "failed to create delete snapshot", nodeDeleteResult)
+		}
+		return nil, errors.NewAutoscalerError(errors.InternalError, "couldn't create delete snapshot, err: %v", err)
+	}
 	for _, node := range nodes {
+		nodeInfo, err := clusterSnapshot.NodeInfos().Get(node.Name)
+		if err != nil {
+			klog.Errorf("Scale-down: can't retrieve node %q from snapshot, err: %v", node.Name, err)
+			nodeDeleteResult := status.NodeDeleteResult{ResultType: status.NodeDeleteErrorInternal, Err: errors.NewAutoscalerError(errors.InternalError, "nodeInfos.Get for %q returned error: %v", node.Name, err)}
+			a.nodeDeletionScheduler.AbortNodeDeletion(node, nodeGroupID, true, "failed to get node info", nodeDeleteResult)
+			continue
+		}
 		a.nodeDeletionTracker.StartDeletionWithDrain(nodeGroupID, node.Name)
-		evictionResults, err := a.evictor.DrainNode(a.ctx, node)
+		evictionResults, err := a.nodeDeletionScheduler.evictor.DrainNode(a.ctx, nodeInfo)
 		klog.V(4).Infof("Scale-down: drain results for node %s: %v", node.Name, evictionResults)
 		if err != nil {
 			a.nodeDeletionTracker.EndDeletion(nodeGroupID, node.Name, status.NodeDeleteResult{

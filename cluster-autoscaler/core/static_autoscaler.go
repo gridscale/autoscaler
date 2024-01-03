@@ -261,11 +261,11 @@ func (a *StaticAutoscaler) cleanUpTaintsForAllNodes() {
 	if readyNodes, err := a.ReadyNodeLister().List(); err != nil {
 		klog.Errorf("Failed to list ready nodes, not cleaning up taints: %v", err)
 	} else {
-		deletetaint.CleanAllToBeDeleted(readyNodes,
+		taints.CleanAllToBeDeleted(readyNodes,
 			a.AutoscalingContext.ClientSet, a.Recorder, a.CordonNodeBeforeTerminate)
 		if a.AutoscalingContext.AutoscalingOptions.MaxBulkSoftTaintCount == 0 {
 			// Clean old taints if soft taints handling is disabled
-			deletetaint.CleanAllDeletionCandidates(readyNodes,
+			taints.CleanAllDeletionCandidates(readyNodes,
 				a.AutoscalingContext.ClientSet, a.Recorder)
 		}
 	}
@@ -670,7 +670,7 @@ func (a *StaticAutoscaler) RunOnce(currentTime time.Time) caerrors.AutoscalerErr
 			scaleDownStart := time.Now()
 			metrics.UpdateLastTime(metrics.ScaleDown, scaleDownStart)
 			empty, needDrain := a.scaleDownPlanner.NodesToDelete(currentTime)
-			scaleDownResult, scaledDownNodes, typedErr := a.scaleDownActuator.StartDeletionForGridscaleProvider(empty, needDrain, scaleDownCandidates, currentTime)
+			scaleDownResult, scaledDownNodes, typedErr := a.scaleDownActuator.StartDeletionForGridscaleProvider(empty, needDrain, scaleDownCandidates)
 			scaleDownStatus.Result = scaleDownResult
 			scaleDownStatus.ScaledDownNodes = scaledDownNodes
 			metrics.UpdateDurationFromStart(metrics.ScaleDown, scaleDownStart)
