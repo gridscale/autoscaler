@@ -364,7 +364,12 @@ func (a *Actuator) drainNodesSyncForGridscaleProvider(nodeGroupID string, nodes 
 	var finishFuncList []func(resultType status.NodeDeleteResultType, err error)
 	for _, node := range nodes {
 		a.nodeDeletionTracker.StartDeletionWithDrain(nodeGroupID, node.Name)
-		evictionResults, err := a.evictor.DrainNode(a.ctx, node)
+		nodeInfo, err := a.ctx.ClusterSnapshot.NodeInfos().Get(node.Name)
+		if err != nil {
+			a.ctx.Recorder.Eventf(node, apiv1.EventTypeWarning, "ScaleDownFailed", "failed to get node info of the node: %v", err)
+			return nil, errors.NewAutoscalerError(errors.ApiCallError, "couldn't get node info of the node %q before draining", node)
+		}
+		evictionResults, err := a.evictor.DrainNode(a.ctx, nodeInfo)
 		klog.V(4).Infof("Scale-down: drain results for node %s: %v", node.Name, evictionResults)
 		if err != nil {
 			a.nodeDeletionTracker.EndDeletion(nodeGroupID, node.Name, status.NodeDeleteResult{
