@@ -158,7 +158,7 @@ spec:
           type: RuntimeDefault
       serviceAccountName: cluster-autoscaler
       containers:
-        - image: registry.kubecuddle.io/k8s/cluster-autoscaler:v0.1.0
+        - image: registry.kubecuddle.io/k8s/cluster-autoscaler:gsk-v1.27.5
           name: cluster-autoscaler
           resources:
             limits:
