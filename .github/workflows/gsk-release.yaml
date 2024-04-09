@@ -12,10 +12,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      - name: Set up Go 1.19
+      - name: Set up Go 1.21
         uses: actions/setup-go@v2
         with:
-          go-version: 1.20.13
+          go-version: 1.21.3
 
       - name: Change directory to cluster-autoscaler and build binary
         working-directory: ./cluster-autoscaler
