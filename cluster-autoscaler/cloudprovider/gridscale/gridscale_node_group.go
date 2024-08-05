@@ -87,14 +87,10 @@ func (n *NodeGroup) IncreaseSize(delta int) error {
 	if err != nil {
 		return err
 	}
+	paramenters := k8sCluster.Properties.Parameters
+	paramenters["k8s_worker_node_count"] = targetSize
 	updateRequestBody := gsclient.PaaSServiceUpdateRequest{
-		Parameters: map[string]interface{}{
-			"k8s_worker_node_count":        targetSize,
-			"k8s_worker_node_ram":          k8sCluster.Properties.Parameters["k8s_worker_node_ram"],
-			"k8s_worker_node_cores":        k8sCluster.Properties.Parameters["k8s_worker_node_cores"],
-			"k8s_worker_node_storage":      k8sCluster.Properties.Parameters["k8s_worker_node_storage"],
-			"k8s_worker_node_storage_type": k8sCluster.Properties.Parameters["k8s_worker_node_storage_type"],
-		},
+		Parameters: paramenters,
 	}
 	err = n.client.UpdatePaaSService(ctx, n.clusterUUID, updateRequestBody)
 	if err != nil {
@@ -120,14 +116,10 @@ func (n *NodeGroup) DeleteNodes(nodes []*apiv1.Node) error {
 	if err != nil {
 		return err
 	}
+	paramenters := k8sCluster.Properties.Parameters
+	paramenters["k8s_worker_node_count"] = targetSize
 	updateRequestBody := gsclient.PaaSServiceUpdateRequest{
-		Parameters: map[string]interface{}{
-			"k8s_worker_node_count":        targetSize,
-			"k8s_worker_node_ram":          k8sCluster.Properties.Parameters["k8s_worker_node_ram"],
-			"k8s_worker_node_cores":        k8sCluster.Properties.Parameters["k8s_worker_node_cores"],
-			"k8s_worker_node_storage":      k8sCluster.Properties.Parameters["k8s_worker_node_storage"],
-			"k8s_worker_node_storage_type": k8sCluster.Properties.Parameters["k8s_worker_node_storage_type"],
-		},
+		Parameters: paramenters,
 	}
 	err = n.client.UpdatePaaSService(ctx, n.clusterUUID, updateRequestBody)
 	if err != nil {
@@ -159,14 +151,10 @@ func (n *NodeGroup) DecreaseTargetSize(delta int) error {
 	if err != nil {
 		return err
 	}
+	paramenters := k8sCluster.Properties.Parameters
+	paramenters["k8s_worker_node_count"] = targetSize
 	updateRequestBody := gsclient.PaaSServiceUpdateRequest{
-		Parameters: map[string]interface{}{
-			"k8s_worker_node_count":        targetSize,
-			"k8s_worker_node_ram":          k8sCluster.Properties.Parameters["k8s_worker_node_ram"],
-			"k8s_worker_node_cores":        k8sCluster.Properties.Parameters["k8s_worker_node_cores"],
-			"k8s_worker_node_storage":      k8sCluster.Properties.Parameters["k8s_worker_node_storage"],
-			"k8s_worker_node_storage_type": k8sCluster.Properties.Parameters["k8s_worker_node_storage_type"],
-		},
+		Parameters: paramenters,
 	}
 	err = n.client.UpdatePaaSService(ctx, n.clusterUUID, updateRequestBody)
 	if err != nil {
