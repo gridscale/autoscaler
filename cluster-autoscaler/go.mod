@@ -21,6 +21,7 @@ require (
 	github.com/google/go-cmp v0.6.0
 	github.com/google/go-querystring v1.0.0
 	github.com/google/uuid v1.6.0
+	github.com/gridscale/gsclient-go/v3 v3.14.2
 	github.com/jmespath/go-jmespath v0.4.0
 	github.com/json-iterator/go v1.1.12
 	github.com/pkg/errors v0.9.1
@@ -30,7 +31,7 @@ require (
 	golang.org/x/crypto v0.21.0
 	golang.org/x/net v0.23.0
 	golang.org/x/oauth2 v0.10.0
-	golang.org/x/sys v0.18.0
+	golang.org/x/sys v0.24.0
 	google.golang.org/api v0.126.0
 	google.golang.org/grpc v1.58.3
 	google.golang.org/protobuf v1.33.0
@@ -143,7 +144,7 @@ require (
 	github.com/prometheus/common v0.44.0 // indirect
 	github.com/prometheus/procfs v0.10.1 // indirect
 	github.com/seccomp/libseccomp-golang v0.10.0 // indirect
-	github.com/sirupsen/logrus v1.9.0 // indirect
+	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/spf13/cobra v1.7.0 // indirect
 	github.com/stoewer/go-strcase v1.3.0 // indirect
 	github.com/stretchr/objx v0.5.0 // indirect
