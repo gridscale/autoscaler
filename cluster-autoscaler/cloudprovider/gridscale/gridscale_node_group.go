@@ -41,6 +41,7 @@ var (
 // same capacity and set of labels.
 type NodeGroup struct {
 	id          string
+	name        string
 	clusterUUID string
 	client      nodeGroupClient
 	nodeCount   int
@@ -88,7 +89,28 @@ func (n *NodeGroup) IncreaseSize(delta int) error {
 		return err
 	}
 	paramenters := k8sCluster.Properties.Parameters
-	paramenters["k8s_worker_node_count"] = targetSize
+	// Update the node count of the node group
+	nodePools, ok := paramenters["pools"].([]interface{})
+	if !ok {
+		return errors.New("'pools' is not found in cluster parameters")
+	}
+	// find the node pool that we want to update
+	for i, pool := range nodePools {
+		nodePoolProperties, ok := pool.(map[string]interface{})
+		if !ok {
+			return errors.New("node pool properties is not a map")
+		}
+		nodePoolName, ok := nodePoolProperties["name"].(string)
+		if !ok {
+			return errors.New("'name' is not found in node pool properties")
+		}
+		if nodePoolName == n.name {
+			nodePoolProperties["count"] = targetSize
+			nodePools[i] = nodePoolProperties
+			break
+		}
+	}
+	paramenters["pools"] = nodePools
 	updateRequestBody := gsclient.PaaSServiceUpdateRequest{
 		Parameters: paramenters,
 	}
@@ -111,9 +133,7 @@ func (n *NodeGroup) AtomicIncreaseSize(delta int) error {
 // given node doesn't belong to this node group. This function should wait
 // until node group size is updated. Implementation required.
 func (n *NodeGroup) DeleteNodes(nodes []*apiv1.Node) error {
-	for _, node := range nodes {
-		klog.V(4).Infof("Deleting node %s from node group", node.Name)
-	}
+	klog.V(4).Infof("Deleting nodes: %v from node group %s", nodes, n.name)
 
 	targetSize := n.nodeCount - len(nodes)
 	ctx := context.Background()
@@ -122,7 +142,28 @@ func (n *NodeGroup) DeleteNodes(nodes []*apiv1.Node) error {
 		return err
 	}
 	paramenters := k8sCluster.Properties.Parameters
-	paramenters["k8s_worker_node_count"] = targetSize
+	// Update the node count of the node group
+	nodePools, ok := paramenters["pools"].([]interface{})
+	if !ok {
+		return errors.New("'pools' is not found in cluster parameters")
+	}
+	// find the node pool that we want to update
+	for i, pool := range nodePools {
+		nodePoolProperties, ok := pool.(map[string]interface{})
+		if !ok {
+			return errors.New("node pool properties is not a map")
+		}
+		nodePoolName, ok := nodePoolProperties["name"].(string)
+		if !ok {
+			return errors.New("'name' is not found in node pool properties")
+		}
+		if nodePoolName == n.name {
+			nodePoolProperties["count"] = targetSize
+			nodePools[i] = nodePoolProperties
+			break
+		}
+	}
+	paramenters["pools"] = nodePools
 	updateRequestBody := gsclient.PaaSServiceUpdateRequest{
 		Parameters: paramenters,
 	}
@@ -157,7 +198,28 @@ func (n *NodeGroup) DecreaseTargetSize(delta int) error {
 		return err
 	}
 	paramenters := k8sCluster.Properties.Parameters
-	paramenters["k8s_worker_node_count"] = targetSize
+	// Update the node count of the node group
+	nodePools, ok := paramenters["pools"].([]interface{})
+	if !ok {
+		return errors.New("'pools' is not found in cluster parameters")
+	}
+	// find the node pool that we want to update
+	for i, pool := range nodePools {
+		nodePoolProperties, ok := pool.(map[string]interface{})
+		if !ok {
+			return errors.New("node pool properties is not a map")
+		}
+		nodePoolName, ok := nodePoolProperties["name"].(string)
+		if !ok {
+			return errors.New("'name' is not found in node pool properties")
+		}
+		if nodePoolName == n.name {
+			nodePoolProperties["count"] = targetSize
+			nodePools[i] = nodePoolProperties
+			break
+		}
+	}
+	paramenters["pools"] = nodePools
 	updateRequestBody := gsclient.PaaSServiceUpdateRequest{
 		Parameters: paramenters,
 	}
@@ -183,6 +245,7 @@ func (n *NodeGroup) Debug() string {
 // Nodes returns a list of all nodes that belong to this node group.  It is
 // required that Instance objects returned by this method have Id field set.
 // Other fields are optional.
+// TODO: identify which nodes belong to this node group
 func (n *NodeGroup) Nodes() ([]cloudprovider.Instance, error) {
 	//TODO(arslan): after increasing a node pool, the number of nodes is not
 	//anymore equal to the cache here. We should return a placeholder node for
@@ -194,22 +257,25 @@ func (n *NodeGroup) Nodes() ([]cloudprovider.Instance, error) {
 		return nil, err
 	}
 	var gskNodeList []gsclient.Server
+SERVERLISTLOOP:
 	for _, server := range serverList {
 		// skip master node
 		if strings.Contains(server.Properties.Name, "master") {
 			continue
 		}
 		// append nodes that have the label
-		// #gsk#<clusterUUID>
+		// #gsk#<clusterUUID> and names have the node group name in it
 		for _, label := range server.Properties.Labels {
-			if label == fmt.Sprintf("#gsk#%s", n.clusterUUID) {
+			if label == fmt.Sprintf("#gsk#%s", n.clusterUUID) &&
+				strings.Contains(server.Properties.Name, n.name) {
 				gskNodeList = append(gskNodeList, server)
+				continue SERVERLISTLOOP
 			}
 		}
 	}
 	nodeList := toInstances(gskNodeList)
 	klog.V(4).Infof("Node list: %v ", nodeList)
-	return toInstances(gskNodeList), nil
+	return nodeList, nil
 }
 
 // TemplateNodeInfo returns a schedulerframework.NodeInfo structure of an empty
