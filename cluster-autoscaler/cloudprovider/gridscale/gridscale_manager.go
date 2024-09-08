@@ -129,20 +129,36 @@ func (m *Manager) Refresh() error {
 	if k8sCluster.Properties.Status != gridscaleK8sActiveStatus {
 		return fmt.Errorf("k8s cluster status is not active: %s", k8sCluster.Properties.Status)
 	}
-	nodeCount, ok := k8sCluster.Properties.Parameters["k8s_worker_node_count"].(float64)
+	nodePools, ok := k8sCluster.Properties.Parameters["pools"].([]interface{})
 	if !ok {
-		return errors.New("k8s_worker_node_count is not found in cluster properties")
+		return errors.New("'pools' is not found in cluster parameters")
 	}
-
-	m.nodeGroups = []*NodeGroup{
-		{
-			id:          fmt.Sprintf("%s-nodepool0", m.clusterUUID),
+	nodeGroupList := make([]*NodeGroup, 0)
+	for _, pool := range nodePools {
+		nodePoolProperties, ok := pool.(map[string]interface{})
+		if !ok {
+			return errors.New("node pool properties is not a map")
+		}
+		nodePoolName, ok := nodePoolProperties["name"].(string)
+		if !ok {
+			return errors.New("'name' is not found in node pool properties")
+		}
+		nodePoolCount, ok := nodePoolProperties["count"].(float64)
+		if !ok {
+			return errors.New("'count' is not found in node pool properties")
+		}
+		nodeGroup := &NodeGroup{
+			id:          fmt.Sprintf("%s-%s", m.clusterUUID, nodePoolName),
+			name:        nodePoolName,
 			clusterUUID: m.clusterUUID,
 			client:      m.client,
-			nodeCount:   int(nodeCount),
+			nodeCount:   int(nodePoolCount),
 			minSize:     m.minNodeCount,
 			maxSize:     m.maxNodeCount,
-		},
+		}
+		nodeGroupList = append(nodeGroupList, nodeGroup)
 	}
+
+	m.nodeGroups = nodeGroupList
 	return nil
 }
