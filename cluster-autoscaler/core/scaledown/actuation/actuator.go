@@ -294,6 +294,12 @@ func (a *Actuator) StartDeletionForGridscaleProvider(empty, drain, all []*apiv1.
 		var nodesToDeleteByGroup []*apiv1.Node
 		nodesToDeleteCountByGroup := len(emptyToDeleteByGroup) + len(drainToDeleteByGroup)
 		if nodesToDeleteCountByGroup > 0 {
+			if nodesToDeleteCountByGroup > len(copiedAllByGroup) {
+				return status.ScaleDownError, nil, errors.NewAutoscalerError(
+					errors.InternalError,
+					fmt.Sprintf("cannot delete nodes because the number of nodes to be deleted is greater than the total node count in the node group %s.", nodeGroupID),
+				)
+			}
 			nodesToDeleteByGroup = copiedAllByGroup[len(copiedAllByGroup)-nodesToDeleteCountByGroup:]
 		}
 		klog.V(4).Info("[**]New empty nodes to delete: ", len(nodesToDeleteByGroup))
