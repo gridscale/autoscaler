@@ -261,29 +261,29 @@ func (a *Actuator) StartDeletionForGridscaleProvider(empty, drain, all []*apiv1.
 	// Scale down nodes for each node group. One node group at a time.
 	for nodeGroupID, nodeGroupWithNodes := range nodesToDeleteByNodeGroup {
 		klog.V(4).Infof(" ------ Start scaling down nodes for node group %s", nodeGroupID)
-		emptyToDelete := []*apiv1.Node{}
-		drainToDelete := []*apiv1.Node{}
+		emptyToDeleteByGroup := []*apiv1.Node{}
+		drainToDeleteByGroup := []*apiv1.Node{}
 		emptyToDeleteNodeGroupViews, drainToDeleteNodeGroupViews := a.budgetProcessor.CropNodes(
 			a.nodeDeletionTracker,
 			nodeGroupWithNodes.Empty,
 			nodeGroupWithNodes.Drain,
 		)
 		for _, bucket := range emptyToDeleteNodeGroupViews {
-			emptyToDelete = append(emptyToDelete, bucket.Nodes...)
+			emptyToDeleteByGroup = append(emptyToDeleteByGroup, bucket.Nodes...)
 		}
 		for _, bucket := range drainToDeleteNodeGroupViews {
-			drainToDelete = append(drainToDelete, bucket.Nodes...)
+			drainToDeleteByGroup = append(drainToDeleteByGroup, bucket.Nodes...)
 		}
-		if len(emptyToDelete) == 0 && len(drainToDelete) == 0 {
+		if len(emptyToDeleteByGroup) == 0 && len(drainToDeleteByGroup) == 0 {
 			return status.ScaleDownNoNodeDeleted, nil, nil
 		}
 
-		klog.V(4).Infof("[**]Original empty nodes in node group %s (count: %d):", nodeGroupID, len(emptyToDelete))
-		for _, node := range emptyToDelete {
+		klog.V(4).Infof("[**]Original empty nodes in node group %s (count: %d):", nodeGroupID, len(emptyToDeleteByGroup))
+		for _, node := range emptyToDeleteByGroup {
 			klog.V(4).Infof("\t-\t%s\n", node.Name)
 		}
-		klog.V(4).Infof("[**]Original drain nodes in node group %s (count: %d):", nodeGroupID, len(drainToDelete))
-		for _, node := range drainToDelete {
+		klog.V(4).Infof("[**]Original drain nodes in node group %s (count: %d):", nodeGroupID, len(drainToDeleteByGroup))
+		for _, node := range drainToDeleteByGroup {
 			klog.V(4).Infof("\t-\t%s\n", node.Name)
 		}
 
@@ -291,18 +291,18 @@ func (a *Actuator) StartDeletionForGridscaleProvider(empty, drain, all []*apiv1.
 		copiedAllByGroup := make([]*apiv1.Node, len(nodeGroupWithNodes.All))
 		copy(copiedAllByGroup, nodeGroupWithNodes.All)
 		// Replace the to-be-deleted nodes with the last n nodes in the group.
-		var nodesToDelete []*apiv1.Node
-		nodesToDeleteCount := len(emptyToDelete) + len(drainToDelete)
-		if nodesToDeleteCount > 0 {
-			nodesToDelete = copiedAllByGroup[len(copiedAllByGroup)-nodesToDeleteCount:]
+		var nodesToDeleteByGroup []*apiv1.Node
+		nodesToDeleteCountByGroup := len(emptyToDeleteByGroup) + len(drainToDeleteByGroup)
+		if nodesToDeleteCountByGroup > 0 {
+			nodesToDeleteByGroup = copiedAllByGroup[len(copiedAllByGroup)-nodesToDeleteCountByGroup:]
 		}
-		klog.V(4).Info("[**]New empty nodes to delete: ", len(nodesToDelete))
-		for _, node := range nodesToDelete {
+		klog.V(4).Info("[**]New empty nodes to delete: ", len(nodesToDeleteByGroup))
+		for _, node := range nodesToDeleteByGroup {
 			klog.V(4).Infof("\t-\t%s\n", node.Name)
 		}
 
 		// Clean taint from OLD to-be-deleted nodes
-		oldToBeDeletedNodes := append(emptyToDelete, drainToDelete...)
+		oldToBeDeletedNodes := append(emptyToDeleteByGroup, drainToDeleteByGroup...)
 		for _, node := range oldToBeDeletedNodes {
 			if _, err := taints.CleanDeletionCandidate(node, a.ctx.ClientSet); err != nil {
 				klog.Warningf("failed to clean taint DeletionCandidateTaint from node %s: %v", node.Name, err)
@@ -313,13 +313,13 @@ func (a *Actuator) StartDeletionForGridscaleProvider(empty, drain, all []*apiv1.
 		}
 
 		// do some sanity check
-		if len(nodesToDelete) <= 0 {
+		if len(nodesToDeleteByGroup) <= 0 {
 			return status.ScaleDownError, nil, errors.NewAutoscalerError(
 				errors.InternalError,
 				"cannot delete nodes because there is no node to be deleted.",
 			)
 		}
-		for i, node := range nodesToDelete {
+		for i, node := range nodesToDeleteByGroup {
 			if node == nil {
 				return status.ScaleDownError, nil, errors.NewAutoscalerError(
 					errors.InternalError,
@@ -330,7 +330,7 @@ func (a *Actuator) StartDeletionForGridscaleProvider(empty, drain, all []*apiv1.
 
 		nodesToDeleteNodeGroupViews := []*budgets.NodeGroupView{
 			{
-				Nodes: nodesToDelete,
+				Nodes: nodesToDeleteByGroup,
 			},
 		}
 
@@ -344,13 +344,13 @@ func (a *Actuator) StartDeletionForGridscaleProvider(empty, drain, all []*apiv1.
 		// Clean taint from NEW to-be-deleted nodes after scale down. We don't care about the error here.
 		defer func() {
 			klog.V(4).Infof("Cleaning taint from to-be-deleted nodes for node group %s", nodeGroupID)
-			for _, node := range nodesToDelete {
+			for _, node := range nodesToDeleteByGroup {
 				taints.CleanToBeDeleted(node, a.ctx.ClientSet, a.ctx.CordonNodeBeforeTerminate)
 			}
 		}()
 		klog.V(4).Infof("Finish tainting to-be-deleted nodes for node group %s", nodeGroupID)
 
-		for _, drainNode := range nodesToDelete {
+		for _, drainNode := range nodesToDeleteByGroup {
 			if sdNode, err := a.scaleDownNodeToReport(drainNode, true); err == nil {
 				klog.V(0).Infof("Scale-down: removing node %s, utilization: %v, pods to reschedule: %s", drainNode.Name, sdNode.UtilInfo, joinPodNames(sdNode.EvictedPods))
 				a.ctx.LogRecorder.Eventf(apiv1.EventTypeNormal, "ScaleDown", "Scale-down: removing node %s, utilization: %v, pods to reschedule: %s", drainNode.Name, sdNode.UtilInfo, joinPodNames(sdNode.EvictedPods))
@@ -362,7 +362,7 @@ func (a *Actuator) StartDeletionForGridscaleProvider(empty, drain, all []*apiv1.
 
 		klog.V(4).Infof("Draining to-be-deleted nodes for node group %s", nodeGroupID)
 		// Drain to-be-deleted nodes synchronously.
-		finishFuncList, cpErr := a.drainNodesSyncForGridscaleProvider(nodeGroupID, nodesToDelete)
+		finishFuncList, cpErr := a.drainNodesSyncForGridscaleProvider(nodeGroupID, nodesToDeleteByGroup)
 		if cpErr != nil {
 			return status.ScaleDownError, nil, errors.NewAutoscalerError(errors.CloudProviderError, "failed to drain nodes: %v", cpErr)
 		}
@@ -370,7 +370,7 @@ func (a *Actuator) StartDeletionForGridscaleProvider(empty, drain, all []*apiv1.
 
 		klog.V(4).Infof("Start scaling down nodes for node group %s", nodeGroupID)
 		// Delete the last n nodes in the cluster.
-		dErr := nodeGroupWithNodes.Group.DeleteNodes(nodesToDelete)
+		dErr := nodeGroupWithNodes.Group.DeleteNodes(nodesToDeleteByGroup)
 		if dErr != nil {
 			for _, finishFunc := range finishFuncList {
 				finishFunc(status.NodeDeleteErrorFailedToDelete, dErr)
