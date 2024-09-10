@@ -242,10 +242,7 @@ func (a *Actuator) StartDeletionForGridscaleProvider(empty, drain, all []*apiv1.
 	a.nodeDeletionScheduler.ResetAndReportMetrics()
 	deletionStartTime := time.Now()
 	defer func() { metrics.UpdateDuration(metrics.ScaleDownNodeDeletion, time.Since(deletionStartTime)) }()
-	// Count the number of nodes to be deleted.
-	nodesToDeleteCount := len(empty) + len(drain)
-
-	if nodesToDeleteCount >= len(all) {
+	if len(empty)+len(drain) >= len(all) {
 		// If the number of nodes to be deleted is greater than or equal to the number of nodes in the cluster,
 		// we cannot delete the nodes. Return an error.
 		return status.ScaleDownError, nil, errors.NewAutoscalerError(
@@ -295,6 +292,7 @@ func (a *Actuator) StartDeletionForGridscaleProvider(empty, drain, all []*apiv1.
 		copy(copiedAllByGroup, nodeGroupWithNodes.All)
 		// Replace the to-be-deleted nodes with the last n nodes in the group.
 		var nodesToDelete []*apiv1.Node
+		nodesToDeleteCount := len(emptyToDelete) + len(drainToDelete)
 		if nodesToDeleteCount > 0 {
 			nodesToDelete = copiedAllByGroup[len(copiedAllByGroup)-nodesToDeleteCount:]
 		}
