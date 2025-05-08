@@ -352,7 +352,7 @@ func (a *Actuator) StartDeletionForGridscaleProvider(empty, drain, all []*apiv1.
 		// Taint all nodes that need drain synchronously, but don't start any drain/deletion yet. Otherwise, pods evicted from one to-be-deleted node
 		// could get recreated on another.
 		klog.V(4).Infof("Tainting to-be-deleted nodes for node group %s", nodeGroupID)
-		err := a.taintNodesSync(nodesToDeleteNodeGroupViews)
+		_, err := a.taintNodesSync(nodesToDeleteNodeGroupViews)
 		if err != nil {
 			return status.ScaleDownError, nil, err
 		}
