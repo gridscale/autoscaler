@@ -256,26 +256,34 @@ func (n *NodeGroup) Nodes() ([]cloudprovider.Instance, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	var gskNodeList []gsclient.Server
-SERVERLISTLOOP:
 	for _, server := range serverList {
-		// skip master node
-		if strings.Contains(server.Properties.Name, "master") {
-			continue
-		}
-		// append nodes that have the label
-		// #gsk#<clusterUUID> and names have the node group name in it
-		for _, label := range server.Properties.Labels {
-			if label == fmt.Sprintf("#gsk#%s", n.clusterUUID) &&
-				strings.Contains(server.Properties.Name, n.name) {
-				gskNodeList = append(gskNodeList, server)
-				continue SERVERLISTLOOP
-			}
+		if n.doesNodeMatch(server) {
+			gskNodeList = append(gskNodeList, server)
 		}
 	}
 	nodeList := toInstances(gskNodeList)
+
 	klog.V(4).Infof("Node list: %v ", nodeList)
 	return nodeList, nil
+}
+
+func (n *NodeGroup) doesNodeMatch(server gsclient.Server) bool {
+	// skip master node
+	if strings.Contains(server.Properties.Name, "master") {
+		return false
+	}
+
+	// append nodes that have the label
+	// #gsk#<clusterUUID> and names have the node group name in it
+	for _, label := range server.Properties.Labels {
+		if label == fmt.Sprintf("#gsk#%s", n.clusterUUID) && strings.Contains(server.Properties.Name, n.name) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // TemplateNodeInfo returns a schedulerframework.NodeInfo structure of an empty
