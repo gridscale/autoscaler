@@ -70,6 +70,27 @@ func TestNodeGroup_Nodes(t *testing.T) {
 		require.Len(t, nodes, 0)
 	})
 
+	t.Run("does not return the master server", func(t *testing.T) {
+		setup()
+
+		client.GetServerListFunc = func(ctx context.Context) ([]gsclient.Server, error) {
+			return []gsclient.Server{
+				{
+					Properties: gsclient.ServerProperties{
+						Name: "test-cluster-master-0",
+						Labels: []string{
+							"#gsk#12345",
+						},
+					},
+				},
+			}, nil
+		}
+
+		nodes, err := group.Nodes()
+		require.NoError(t, err)
+		require.Len(t, nodes, 0)
+	})
+
 	t.Run("returns error if client returns an error", func(t *testing.T) {
 		setup()
 
@@ -93,6 +114,7 @@ func TestNodeGroup_Nodes(t *testing.T) {
 						Name: "some-other-cluster-node-pool-dev-0",
 						Labels: []string{
 							"#gsk#12345",
+							"#gsk-pool#pool-dev",
 						},
 					},
 				},
@@ -118,30 +140,33 @@ func TestNodeGroup_Nodes(t *testing.T) {
 
 		client.GetServerListFunc = func(ctx context.Context) ([]gsclient.Server, error) {
 			return []gsclient.Server{
-				// Server which belongs to another cluster
+				// Server which belongs to another cluster but with the same pool name
 				{
 					Properties: gsclient.ServerProperties{
 						Name: "some-other-cluster-node-pool-dev-0",
 						Labels: []string{
 							"#gsk#12345",
+							"#gsk-pool#pool-dev",
 						},
 					},
 				},
-				// Server which belongs to this cluster
+				// Server which belongs to this cluster and the dev pool
 				{
 					Properties: gsclient.ServerProperties{
 						Name: "my-cluster-node-pool-dev-0",
 						Labels: []string{
 							fmt.Sprintf("#gsk#%s", clusterID),
+							"#gsk-pool#pool-dev",
 						},
 					},
 				},
-				// Server which belongs to this cluster
+				// Server which belongs to this cluster and the dev pool
 				{
 					Properties: gsclient.ServerProperties{
 						Name: "my-cluster-node-pool-dev-1",
 						Labels: []string{
 							fmt.Sprintf("#gsk#%s", clusterID),
+							"#gsk-pool#pool-dev",
 						},
 					},
 				},
@@ -151,6 +176,7 @@ func TestNodeGroup_Nodes(t *testing.T) {
 						Name: "my-cluster-node-pool-prod-1",
 						Labels: []string{
 							fmt.Sprintf("#gsk#%s", clusterID),
+							"#gsk-pool#pool-prod",
 						},
 					},
 				},
@@ -163,6 +189,43 @@ func TestNodeGroup_Nodes(t *testing.T) {
 	})
 
 	t.Run("returns nodes which belongs to this cluster and node pool even on weired node pool names", func(t *testing.T) {
+		setup()
+
+		// This test assumes we have 2 pools named "pool0" and "pool01", which could be used
+		// by users.
+		group.name = "pool0"
+
+		client.GetServerListFunc = func(ctx context.Context) ([]gsclient.Server, error) {
+			return []gsclient.Server{
+				// Server which belongs to pool0
+				{
+					Properties: gsclient.ServerProperties{
+						Name: "my-cluster-node-pool0-0",
+						Labels: []string{
+							fmt.Sprintf("#gsk#%s", clusterID),
+							"#gsk-pool#pool0",
+						},
+					},
+				},
+				// Server which belongs to pool1
+				{
+					Properties: gsclient.ServerProperties{
+						Name: "my-cluster-node-pool01-0",
+						Labels: []string{
+							fmt.Sprintf("#gsk#%s", clusterID),
+							"#gsk-pool#pool01",
+						},
+					},
+				},
+			}, nil
+		}
+
+		nodes, err := group.Nodes()
+		require.NoError(t, err)
+		assert.Len(t, nodes, 1)
+	})
+
+	t.Run("returns nodes based on server name if no pool name is set", func(t *testing.T) {
 		setup()
 
 		// This test assumes we have 2 pools named "pool0" and "pool01", which could be used
@@ -194,6 +257,10 @@ func TestNodeGroup_Nodes(t *testing.T) {
 
 		nodes, err := group.Nodes()
 		require.NoError(t, err)
-		assert.Len(t, nodes, 1)
+
+		// Why 2 nodes? Because the implementation will fallback to matching servers based on their name.
+		// This was the logic used before the #gsk-pool# label was introduced. For compatibility reasons
+		// we keep this behavior, if a server does not have that label yet.
+		assert.Len(t, nodes, 2)
 	})
 }
