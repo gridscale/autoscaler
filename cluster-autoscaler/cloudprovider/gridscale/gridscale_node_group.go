@@ -275,12 +275,23 @@ func (n *NodeGroup) doesNodeMatch(server gsclient.Server) bool {
 		return false
 	}
 
-	// append nodes that have the label
-	// #gsk#<clusterUUID> and names have the node group name in it
+	// write server labels into a map for easier lookup
+	labelMap := make(map[string]struct{}, len(server.Properties.Labels))
+
 	for _, label := range server.Properties.Labels {
-		if label == fmt.Sprintf("#gsk#%s", n.clusterUUID) && strings.Contains(server.Properties.Name, n.name) {
-			return true
-		}
+		labelMap[label] = struct{}{}
+	}
+
+	// Build expected labels which relate the server to this node group
+	expectedClusterLabel := fmt.Sprintf("#gsk#%s", n.clusterUUID)
+
+	// skip nodes not belonging to this cluster
+	if _, found := labelMap[expectedClusterLabel]; !found {
+		return false
+	}
+	// keep nodes whose name indicates they belong to this node group
+	if strings.Contains(server.Properties.Name, n.name) {
+		return true
 	}
 
 	return false
