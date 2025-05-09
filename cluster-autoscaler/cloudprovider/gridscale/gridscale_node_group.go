@@ -278,20 +278,39 @@ func (n *NodeGroup) doesNodeMatch(server gsclient.Server) bool {
 	// write server labels into a map for easier lookup
 	labelMap := make(map[string]struct{}, len(server.Properties.Labels))
 
+	containsPoolLabel := false
+
 	for _, label := range server.Properties.Labels {
 		labelMap[label] = struct{}{}
+
+		if strings.HasPrefix(label, "#gsk-pool#") {
+			containsPoolLabel = true
+		}
 	}
 
 	// Build expected labels which relate the server to this node group
 	expectedClusterLabel := fmt.Sprintf("#gsk#%s", n.clusterUUID)
+	expectedPoolLabel := fmt.Sprintf("#gsk-pool#%s", n.name)
 
 	// skip nodes not belonging to this cluster
 	if _, found := labelMap[expectedClusterLabel]; !found {
 		return false
 	}
-	// keep nodes whose name indicates they belong to this node group
-	if strings.Contains(server.Properties.Name, n.name) {
+
+	// Keep nodes which have the pool label (added in GSK 1.31)
+	if _, found := labelMap[expectedPoolLabel]; found {
 		return true
+	}
+
+	// Here the server is part of this cluster but not of this pool.
+	// For backwards compatibility it could be that this cluster does not (yet) have the newly introduced
+	// "#gsk-pool#" label. We want to handle that.
+	// If the server has ANY pool label, we assume it correctly does not belong to this node group.
+	// If the server does not have ANY pool label, it may have not yet been labeled after the upgrade.
+	// In the last case, we match based on the server name.
+	if !containsPoolLabel {
+		// keep nodes whose name indicates they belong to this node group
+		return strings.Contains(server.Properties.Name, n.name)
 	}
 
 	return false
