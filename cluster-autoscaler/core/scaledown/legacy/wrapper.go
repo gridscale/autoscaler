@@ -98,6 +98,16 @@ func (p *ScaleDownWrapper) StartDeletion(empty, needDrain []*apiv1.Node) (status
 	return p.actuator.StartDeletion(empty, needDrain)
 }
 
+// StartDeletionForGridscaleProvider triggers an actual scale down logic for gridscale provider.
+func (p *ScaleDownWrapper) StartDeletionForGridscaleProvider(empty, needDrain, all []*apiv1.Node) (status.ScaleDownResult, []*status.ScaleDownNode, errors.AutoscalerError) {
+	// Done to preserve legacy behavior, see comment on NodesToDelete.
+	if p.lastNodesToDeleteErr != nil || p.lastNodesToDeleteResult != status.ScaleDownNodeDeleteStarted {
+		return p.lastNodesToDeleteResult, []*status.ScaleDownNode{}, p.lastNodesToDeleteErr
+	}
+
+	return p.actuator.StartDeletionForGridscaleProvider(empty, needDrain, all)
+}
+
 // CheckStatus snapshots current deletion status
 func (p *ScaleDownWrapper) CheckStatus() scaledown.ActuationStatus {
 	return p.actuator.CheckStatus()
