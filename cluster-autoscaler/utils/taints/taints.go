@@ -35,8 +35,8 @@ import (
 	klog "k8s.io/klog/v2"
 )
 
-// gridscaleNode0SuffixName is the suffix of the gridscale node 0's name
-const gridscaleNode0SuffixName = "-node-pool0-0"
+// gridscaleNode0SuffixName is the suffix of the first node of every gridscale node pool.
+const gridscaleNode0SuffixName = "-0"
 
 const (
 	// ToBeDeletedTaint is a taint used to make the node unschedulable.
