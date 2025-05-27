@@ -35,6 +35,9 @@ import (
 	klog "k8s.io/klog/v2"
 )
 
+// gridscaleNode0SuffixName is the suffix of the gridscale node 0's name
+const gridscaleNode0SuffixName = "-node-pool0-0"
+
 const (
 	// ToBeDeletedTaint is a taint used to make the node unschedulable.
 	ToBeDeletedTaint = "ToBeDeletedByClusterAutoscaler"
@@ -186,6 +189,11 @@ func AddTaints(node *apiv1.Node, client kube_client.Interface, taints []apiv1.Ta
 	var err error
 	refresh := false
 	for {
+		// skip tainting gridscale node 0
+		if strings.HasSuffix(node.Name, gridscaleNode0SuffixName) {
+			klog.V(1).Infof("Skipping tainting of node %v, because it is a gridscale node 0", node.Name)
+			return nil
+		}
 		if refresh {
 			// Get the newest version of the node.
 			freshNode, err = client.CoreV1().Nodes().Get(context.TODO(), node.Name, metav1.GetOptions{})
