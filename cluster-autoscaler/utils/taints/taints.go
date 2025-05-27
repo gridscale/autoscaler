@@ -182,6 +182,15 @@ func MarkDeletionCandidate(node *apiv1.Node, client kube_client.Interface) error
 	return AddTaints(node, client, []apiv1.Taint{taint}, false)
 }
 
+// skipTaintingGridscaleNode checks if a node should not be tainted. This is gridscale specific.
+func skipTaintingGridscaleNode(node *apiv1.Node) (reason string, skip bool) {
+	// The first node should never be tainted
+	if strings.HasSuffix(node.Name, gridscaleNode0SuffixName) {
+		return fmt.Sprintf("Skipping tainting of node %v, because the first pool node should never be tainted", node.Name), true
+	}
+	return "", false
+}
+
 // AddTaints sets the specified taints on the node.
 func AddTaints(node *apiv1.Node, client kube_client.Interface, taints []apiv1.Taint, cordonNode bool) error {
 	retryDeadline := time.Now().Add(maxRetryDeadline)
@@ -189,9 +198,9 @@ func AddTaints(node *apiv1.Node, client kube_client.Interface, taints []apiv1.Ta
 	var err error
 	refresh := false
 	for {
-		// skip tainting gridscale node 0
-		if strings.HasSuffix(node.Name, gridscaleNode0SuffixName) {
-			klog.V(1).Infof("Skipping tainting of node %v, because it is a gridscale node 0", node.Name)
+		// skip tainting gridscale nodes when we don't want to
+		if reason, skip := skipTaintingGridscaleNode(node); skip {
+			klog.V(1).Infof(reason)
 			return nil
 		}
 		if refresh {
