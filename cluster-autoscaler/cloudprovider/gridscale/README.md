@@ -137,15 +137,26 @@ Modify the following `Tiltfile` to rebuild and deploy the container image into a
    1. Replace `<your-test-project>` with an actual project at `https://registry.kubecuddle.io`
    2. Replace `gsk-v1.31.2` with the version used in `cluster-autoscaler-autodiscover.yaml`
 4. Run `tilt up` to start Tilt
-5. Manually build the Go binary whenever you want to update the deployment: `make build-arch-amd64`
+5. Open Tilt in your browser and build the binary by clicking on the `binary` resource. Do this every time you change the Go code.
 
 ```Tiltfile
-watch_file("cluster-autoscaler-amd64")
+local_resource(
+  "binary",
+  cmd="make build-arch-amd64",
+  trigger_mode=TRIGGER_MODE_MANUAL,
+  auto_init=False,
+  labels=["makefile"],
+  deps = ["."]
+)
 
 docker_build(
     ref = "registry.kubecuddle.io/<your-test-project>/cluster-autoscaler:gsk-v1.31.2",
     context = ".",
     dockerfile = "Dockerfile.amd64",
+    only = [
+        "Dockerfile.amd64",
+        "cluster-autoscaler-amd64",
+    ]
 )
 
 k8s_yaml('cluster-autoscaler-autodiscover.namespace.yaml')
