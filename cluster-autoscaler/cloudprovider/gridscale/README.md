@@ -135,7 +135,7 @@ Modify the following `Tiltfile` to rebuild and deploy the container image into a
 2. Use the YML below to create the namespace automatically.
 3. Modify the `Tiltfile`:
    1. Replace `<your-test-project>` with an actual project at `https://registry.kubecuddle.io`
-   2. Replace `gsk-v1.31.2` with the version used in `cluster-autoscaler-autodiscover.yaml`
+   2. Replace `gsk-v1.32.5` with the version used in `cluster-autoscaler-autodiscover.yaml`
 4. Run `tilt up` to start Tilt
 5. Open Tilt in your browser and build the binary by clicking on the `binary` resource. Do this every time you change the Go code.
 
@@ -150,7 +150,7 @@ local_resource(
 )
 
 docker_build(
-    ref = "registry.kubecuddle.io/<your-test-project>/cluster-autoscaler:gsk-v1.31.2",
+    ref = "registry.kubecuddle.io/<your-test-project>/cluster-autoscaler:gsk-v1.32.5",
     context = ".",
     dockerfile = "Dockerfile.amd64",
     only = [
