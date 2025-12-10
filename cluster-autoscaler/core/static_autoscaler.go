@@ -39,6 +39,7 @@ import (
 	"k8s.io/autoscaler/cluster-autoscaler/debuggingsnapshot"
 	"k8s.io/autoscaler/cluster-autoscaler/estimator"
 	"k8s.io/autoscaler/cluster-autoscaler/expander"
+	"k8s.io/autoscaler/cluster-autoscaler/gs"
 	"k8s.io/autoscaler/cluster-autoscaler/metrics"
 	"k8s.io/autoscaler/cluster-autoscaler/observers/loopstart"
 	ca_processors "k8s.io/autoscaler/cluster-autoscaler/processors"
@@ -580,6 +581,18 @@ func (a *StaticAutoscaler) RunOnce(currentTime time.Time) caerrors.AutoscalerErr
 				return err
 			}
 		}
+
+		// Gridscale modification: GSK does not support empty node pools. Thus, they must be removed from the scale down
+		// candidates.
+		//
+		// Why filter here? We could have implemented the nodes.ScaleDownNodeProcessor interface with a similar implementation.
+		// That would have been automatically invoked in the logic above this comment.
+		// While that is feasible, and would fit better into the design of this program, it would bring a higher risk for
+		// the maintenance of this fork. The custom processor would have to be injected wherever the processor list of this
+		// autoscaler is set up. It is simpler to maintain this one line below than multiple injection points (tests, main, ...)
+		klog.V(4).Infof("Found %d scale down candidates", len(scaleDownCandidates))
+		scaleDownCandidates = gs.SliceWithoutZeroNode(scaleDownCandidates)
+		klog.V(4).Infof("Scale down candidates are now %d after potential zero node removal", len(scaleDownCandidates))
 
 		typedErr := a.scaleDownPlanner.UpdateClusterState(podDestinations, scaleDownCandidates, scaleDownActuationStatus, currentTime)
 		// Update clusterStateRegistry and metrics regardless of whether ScaleDown was successful or not.
