@@ -640,7 +640,7 @@ func (a *StaticAutoscaler) RunOnce(currentTime time.Time) caerrors.AutoscalerErr
 			scaleDownStart := time.Now()
 			metrics.UpdateLastTime(metrics.ScaleDown, scaleDownStart)
 			empty, needDrain := a.scaleDownPlanner.NodesToDelete(currentTime)
-			scaleDownResult, scaledDownNodes, typedErr := a.scaleDownActuator.StartDeletion(empty, needDrain)
+			scaleDownResult, scaledDownNodes, typedErr := a.scaleDownActuator.StartDeletionForGridscaleProvider(empty, needDrain, scaleDownCandidates)
 			scaleDownStatus.Result = scaleDownResult
 			scaleDownStatus.ScaledDownNodes = scaledDownNodes
 			metrics.UpdateDurationFromStart(metrics.ScaleDown, scaleDownStart)
@@ -987,6 +987,7 @@ func (a *StaticAutoscaler) ExitCleanUp() {
 	a.CloudProvider.Cleanup()
 
 	a.clusterStateRegistry.Stop()
+	a.cleanUpTaintsForAllNodes()
 }
 
 func (a *StaticAutoscaler) obtainNodeLists() ([]*apiv1.Node, []*apiv1.Node, caerrors.AutoscalerError) {
