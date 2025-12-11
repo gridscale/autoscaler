@@ -2532,8 +2532,11 @@ func TestStaticAutoscalerRunOnceInvokesScaleDownStatusProcessor(t *testing.T) {
 						},
 					},
 				},
-				RemovedNodeGroups:     []cloudprovider.NodeGroup{},
-				NodeDeleteResults:     map[string]status.NodeDeleteResult{},
+				RemovedNodeGroups: []cloudprovider.NodeGroup{},
+				NodeDeleteResults: map[string]status.NodeDeleteResult{"n2": {
+					Err:        nil,
+					ResultType: status.NodeDeleteOk,
+				}},
 				NodeDeleteResultsAsOf: time.Time{},
 			},
 		},
@@ -2594,6 +2597,7 @@ func TestStaticAutoscalerRunOnceInvokesScaleDownStatusProcessor(t *testing.T) {
 				clusterStateConfig: clusterstate.ClusterStateRegistryConfig{
 					OkTotalUnreadyCount: 1,
 				},
+				nodesDeleted: make(chan bool, len(test.expectedStatus.ScaledDownNodes)), // gridscale: It seems like this should always be set, maybe this is a bug upstream. if not set, tests are deadlocked in: `config.nodesDeleted <- true`
 			}
 			autoscaler, err := setupAutoscaler(setupConfig)
 			assert.NoError(t, err)
