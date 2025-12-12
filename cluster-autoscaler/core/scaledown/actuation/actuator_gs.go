@@ -128,15 +128,6 @@ func (a *Actuator) StartDeletionForGridscaleProvider(empty, drain, all []*apiv1.
 	klog.V(4).Info("[**]All nodes:")
 	logNodes(all)
 
-	if len(empty)+len(drain) >= len(all) {
-		// If the number of nodes to be deleted is greater than or equal to the number of nodes in the cluster,
-		// we cannot delete the nodes. Return an error.
-		return status.ScaleDownError, nil, errors.NewAutoscalerError(
-			errors.InternalError,
-			"cannot delete nodes because the number of nodes to be deleted is greater than or equal to the number of nodes in the cluster. There has to be at least one node left in the cluster.",
-		)
-	}
-
 	// Group the empty/drain nodes by node group.
 	nodesToDeleteByNodeGroup, err := a.groupNodesByNodeGroup(empty, drain, all)
 	if err != nil {
@@ -162,7 +153,7 @@ func (a *Actuator) StartDeletionForGridscaleProvider(empty, drain, all []*apiv1.
 		}
 		if len(emptyToDeleteByGroup) == 0 && len(drainToDeleteByGroup) == 0 {
 			klog.V(4).Infof(" ------ Aborting scaling down nodes for node group %s because no empty or drain nodes are present to be deleted", nodeGroupID)
-			return status.ScaleDownNoNodeDeleted, nil, nil
+			return status.ScaleDownNoNodeDeleted, nil, nil // FIXME: Shouldn't we move on to the next group instead of returning?
 		}
 
 		klog.V(4).Infof("[**]Original empty nodes in node group %s (count: %d):", nodeGroupID, len(emptyToDeleteByGroup))
