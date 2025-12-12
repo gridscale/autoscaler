@@ -27,7 +27,7 @@ type NodeGroupWithNodes struct {
 
 // groupNodesByNodeGroup groups empty and drain nodes by their node group.
 // If sortByNodeName is true, the nodes in each group will be sorted alphabetically by node name.
-func (a *Actuator) groupNodesByNodeGroup(empty, drain, all []*apiv1.Node, sortByNodeName bool) (map[string]NodeGroupWithNodes, errors.AutoscalerError) {
+func (a *Actuator) groupNodesByNodeGroup(empty, drain, all []*apiv1.Node) (map[string]NodeGroupWithNodes, errors.AutoscalerError) {
 	grouped := map[string]NodeGroupWithNodes{}
 	for _, node := range empty {
 		nodeGroup, err := a.ctx.CloudProvider.NodeGroupForNode(node)
@@ -85,25 +85,24 @@ func (a *Actuator) groupNodesByNodeGroup(empty, drain, all []*apiv1.Node, sortBy
 		currentNodeGroupWithNodes.All = append(currentNodeGroupWithNodes.All, node)
 		grouped[nodeGroup.Id()] = currentNodeGroupWithNodes
 	}
-	// if sortByNodeName is true, sort the nodes alphabetically by node name in each group
-	if sortByNodeName {
-		for _, nodeGroupWithNodes := range grouped {
-			sort.Slice(nodeGroupWithNodes.Empty, func(i, j int) bool {
-				iNameLower := strings.ToLower(nodeGroupWithNodes.Empty[i].Name)
-				jNameLower := strings.ToLower(nodeGroupWithNodes.Empty[j].Name)
-				return iNameLower < jNameLower
-			})
-			sort.Slice(nodeGroupWithNodes.Drain, func(i, j int) bool {
-				iNameLower := strings.ToLower(nodeGroupWithNodes.Drain[i].Name)
-				jNameLower := strings.ToLower(nodeGroupWithNodes.Drain[j].Name)
-				return iNameLower < jNameLower
-			})
-			sort.Slice(nodeGroupWithNodes.All, func(i, j int) bool {
-				iNameLower := strings.ToLower(nodeGroupWithNodes.All[i].Name)
-				jNameLower := strings.ToLower(nodeGroupWithNodes.All[j].Name)
-				return iNameLower < jNameLower
-			})
-		}
+
+	// sort the nodes alphabetically by node name in each group
+	for _, nodeGroupWithNodes := range grouped {
+		sort.Slice(nodeGroupWithNodes.Empty, func(i, j int) bool {
+			iNameLower := strings.ToLower(nodeGroupWithNodes.Empty[i].Name)
+			jNameLower := strings.ToLower(nodeGroupWithNodes.Empty[j].Name)
+			return iNameLower < jNameLower
+		})
+		sort.Slice(nodeGroupWithNodes.Drain, func(i, j int) bool {
+			iNameLower := strings.ToLower(nodeGroupWithNodes.Drain[i].Name)
+			jNameLower := strings.ToLower(nodeGroupWithNodes.Drain[j].Name)
+			return iNameLower < jNameLower
+		})
+		sort.Slice(nodeGroupWithNodes.All, func(i, j int) bool {
+			iNameLower := strings.ToLower(nodeGroupWithNodes.All[i].Name)
+			jNameLower := strings.ToLower(nodeGroupWithNodes.All[j].Name)
+			return iNameLower < jNameLower
+		})
 	}
 	return grouped, nil
 }
@@ -139,7 +138,7 @@ func (a *Actuator) StartDeletionForGridscaleProvider(empty, drain, all []*apiv1.
 	}
 
 	// Group the empty/drain nodes by node group.
-	nodesToDeleteByNodeGroup, err := a.groupNodesByNodeGroup(empty, drain, all, true)
+	nodesToDeleteByNodeGroup, err := a.groupNodesByNodeGroup(empty, drain, all)
 	if err != nil {
 		return status.ScaleDownError, nil, err
 	}
