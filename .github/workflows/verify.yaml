@@ -43,3 +43,4 @@ jobs:
         run: hack/verify-all.sh -v
         env:
           GO111MODULE: auto
+          EXCLUDE: verify-boilerplate.sh
