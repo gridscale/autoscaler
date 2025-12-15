@@ -1,0 +1,52 @@
+name: GSK - Test Go
+
+on:
+  - push
+  - pull_request
+
+env:
+  GOPATH: ${{ github.workspace }}/go
+  GOVERSION: "1.23.11"
+
+permissions:
+  contents: read
+  checks: write
+
+jobs:
+  # This job is a copy of the test-and-verify job, but adapted to run tests only on code from the
+  # gridscale fork. The idea is to have at least a bit of coverage on gridscale specific code, because the other
+  # providers are likely broken because of the forks changes.
+  test-gridscale:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: '${{ env.GOVERSION }}'
+
+      - uses: actions/checkout@v2
+        with:
+          path: ${{ env.GOPATH }}/src/k8s.io/autoscaler
+
+      - name: Test
+        working-directory: ${{ env.GOPATH }}/src/k8s.io/autoscaler/cluster-autoscaler/cloudprovider/gridscale
+        run: go test ./...
+
+  # This builds the binary to make sure that compiling the whole operator
+  # works. We want to catch build errors early, not just when tagging a release.
+  # This is a copy of the steps in .github/workflows/gsk-test.yaml
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: '${{ env.GOVERSION }}'
+
+      - name: Change directory to cluster-autoscaler and build binary
+        working-directory: ./cluster-autoscaler
+        run: |
+          make build-arch-amd64

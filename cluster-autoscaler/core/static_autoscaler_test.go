@@ -31,6 +31,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"k8s.io/autoscaler/cluster-autoscaler/gs"
 
 	appsv1 "k8s.io/api/apps/v1"
 	apiv1 "k8s.io/api/core/v1"
@@ -796,7 +797,7 @@ func TestStaticAutoscalerRunOnceWithAutoprovisionedEnabled(t *testing.T) {
 	provider.AddAutoprovisionedNodeGroup("autoprovisioned-TN1", 0, 10, 0, "TN1")
 	autoprovisionedTN1 := reflect.ValueOf(provider.GetNodeGroup("autoprovisioned-TN1")).Interface().(*testprovider.TestNodeGroup)
 	assert.NotNil(t, autoprovisionedTN1)
-	provider.AddNode("ng1,", n1)
+	provider.AddNode("ng1", n1)
 	assert.NotNil(t, provider)
 
 	// Create context with mocked lister registry.
@@ -2109,7 +2110,7 @@ func TestStaticAutoscalerUpcomingScaleDownCandidates(t *testing.T) {
 	// but they should be inserted into the snapshot.
 	err = autoscaler.RunOnce(startTime)
 	assert.NoError(t, err)
-	assert.Equal(t, readyNodeNames, planner.lastCandidateNodes)
+	assert.Equal(t, gs.MapWithoutZeroNode(readyNodeNames), planner.lastCandidateNodes)
 	assertNodesInSnapshot(t, autoscaler.ClusterSnapshot, readyNodeNames)
 	assertNodesNotInSnapshot(t, autoscaler.ClusterSnapshot, notReadyNodeNames)
 	assertSnapshotNodeCount(t, autoscaler.ClusterSnapshot, len(allNodeNames)) // Ready nodes + fake upcoming copies for unready nodes.
@@ -2117,7 +2118,7 @@ func TestStaticAutoscalerUpcomingScaleDownCandidates(t *testing.T) {
 	// RunOnce run in the last moment when unready nodes are still classified as NotStarted - assertions the same as above.
 	err = autoscaler.RunOnce(startTime.Add(clusterstate.MaxNodeStartupTime).Add(-time.Second))
 	assert.NoError(t, err)
-	assert.Equal(t, readyNodeNames, planner.lastCandidateNodes)
+	assert.Equal(t, gs.MapWithoutZeroNode(readyNodeNames), planner.lastCandidateNodes)
 	assertNodesInSnapshot(t, autoscaler.ClusterSnapshot, readyNodeNames)
 	assertNodesNotInSnapshot(t, autoscaler.ClusterSnapshot, notReadyNodeNames)
 	assertSnapshotNodeCount(t, autoscaler.ClusterSnapshot, len(allNodeNames)) // Ready nodes + fake upcoming copies for unready nodes.
@@ -2126,7 +2127,7 @@ func TestStaticAutoscalerUpcomingScaleDownCandidates(t *testing.T) {
 	// Unready instead. The unready nodes should be passed as scale-down candidates at this point, and inserted into the snapshot. Fake upcoming
 	// nodes should no longer be inserted.
 	err = autoscaler.RunOnce(startTime.Add(clusterstate.MaxNodeStartupTime).Add(time.Second))
-	assert.Equal(t, allNodeNames, planner.lastCandidateNodes)
+	assert.Equal(t, gs.MapWithoutZeroNode(allNodeNames), planner.lastCandidateNodes)
 	assertNodesInSnapshot(t, autoscaler.ClusterSnapshot, allNodeNames)
 	assertSnapshotNodeCount(t, autoscaler.ClusterSnapshot, len(allNodeNames)) // Ready nodes + actual unready nodes.
 }
@@ -2531,8 +2532,11 @@ func TestStaticAutoscalerRunOnceInvokesScaleDownStatusProcessor(t *testing.T) {
 						},
 					},
 				},
-				RemovedNodeGroups:     []cloudprovider.NodeGroup{},
-				NodeDeleteResults:     map[string]status.NodeDeleteResult{},
+				RemovedNodeGroups: []cloudprovider.NodeGroup{},
+				NodeDeleteResults: map[string]status.NodeDeleteResult{"n2": {
+					Err:        nil,
+					ResultType: status.NodeDeleteOk,
+				}},
 				NodeDeleteResultsAsOf: time.Time{},
 			},
 		},
@@ -2593,6 +2597,7 @@ func TestStaticAutoscalerRunOnceInvokesScaleDownStatusProcessor(t *testing.T) {
 				clusterStateConfig: clusterstate.ClusterStateRegistryConfig{
 					OkTotalUnreadyCount: 1,
 				},
+				nodesDeleted: make(chan bool, len(test.expectedStatus.ScaledDownNodes)), // gridscale: It seems like this should always be set, maybe this is a bug upstream. if not set, tests are deadlocked in: `config.nodesDeleted <- true`
 			}
 			autoscaler, err := setupAutoscaler(setupConfig)
 			assert.NoError(t, err)
@@ -2710,14 +2715,14 @@ func TestCleaningSoftTaintsInScaleDown(t *testing.T) {
 			name:                          "Soft tainted nodes are not cleaned when scale down requested",
 			testNodes:                     nodesToHaveTaints,
 			scaleDownInCoolDown:           false,
-			expectedNodesWithSoftTaints:   nodesToHaveTaints,
+			expectedNodesWithSoftTaints:   gs.SliceWithoutZeroNode(nodesToHaveTaints),
 			expectedNodesWithNoSoftTaints: []*apiv1.Node{},
 		},
 		{
 			name:                          "Soft tainted nodes are cleaned only from min sized node group when scale down requested",
 			testNodes:                     append(nodesToHaveNoTaints, nodesToHaveTaints...),
 			scaleDownInCoolDown:           false,
-			expectedNodesWithSoftTaints:   nodesToHaveTaints,
+			expectedNodesWithSoftTaints:   gs.SliceWithoutZeroNode(nodesToHaveTaints),
 			expectedNodesWithNoSoftTaints: nodesToHaveNoTaints,
 		},
 	}
